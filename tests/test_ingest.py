@@ -37,8 +37,8 @@ def test_ingest_stores_both_formats_and_upserts_in_place(tmp_path, caplog):
     assert any(source.endswith(".docx") for source in sources)
     assert versions["HR Policy"] == {"1.0", "2.0"}
     assert versions["Preparedness Policy"] == {"1.0", "2.0"}
-    assert versions["Time and Usage Policy"] == {"1.0", "2.0"}
-    assert versions["Health Policy"] == {"1.0"}
+    assert versions["Time & Usage Policy"] == {"1.0", "2.0"}
+    assert versions["Health & Wellness Policy"] == {"1.0"}
     assert embedder.tasks == ["document"]
 
     assert ingest(DOCS, embedder, database) is None
@@ -47,7 +47,7 @@ def test_ingest_stores_both_formats_and_upserts_in_place(tmp_path, caplog):
     assert "finished" in caplog.text
 
 
-def test_a_record_that_fails_validation_twice_is_not_stored(tmp_path, caplog):
+def test_a_record_that_fails_validation_is_not_stored(tmp_path, caplog):
     caplog.set_level(logging.INFO, logger="ingest")
     embedder = FakeEmbedder()
     database = Database(tmp_path / "chroma")
@@ -71,8 +71,8 @@ def test_a_record_that_fails_validation_twice_is_not_stored(tmp_path, caplog):
         entry for entry in caplog.records if "missing field: version" in entry.message
     ]
     assert error == "missing field: version"
-    assert "attempt=2" in failures[1].message
-    assert error in failures[1].message
+    assert len(failures) == 1
+    assert error in failures[0].message
     assert database.collection.count() == 0
     assert embedder.tasks == []
 

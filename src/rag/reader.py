@@ -8,6 +8,7 @@ from docx import Document
 logger = logging.getLogger("ingest")
 SECTION = re.compile(r"^(\d+)\.\s+(.*)$")
 SUBSECTION = re.compile(r"^(\d+\.\d+(?:\.\d+)*)\s+(.*)$")
+TITLE = re.compile(r"^(.+?)\s+[—–-]\s+Version\s+(\d+\.\d+)$")
 
 
 def configure_logging():
@@ -24,11 +25,26 @@ def log(step, message):
     logger.info("%s %s", step, message)
 
 
+def policy_and_version_from_lines(lines):
+    for raw in lines:
+        line = " ".join(raw.split())
+        if not line:
+            continue
+        if SECTION.match(line) or SUBSECTION.match(line):
+            break
+        match = TITLE.match(line)
+        if match:
+            return match.group(1), match.group(2)
+    raise ValueError("policy and version are missing from the document")
+
+
 def policy_and_version(path):
-    stem = Path(path).stem
-    policy, version = stem.rsplit(" v", 1)
-    policy = policy.split(" - ", 1)[1]
-    return policy, version
+    path = Path(path)
+    if path.suffix.lower() == ".pdf":
+        lines = _pdf_lines(path)
+    else:
+        lines = _docx_lines(path)
+    return policy_and_version_from_lines(lines)
 
 
 def blocks_from_lines(lines):
@@ -70,13 +86,13 @@ def _docx_lines(path):
 
 def read(path):
     path = Path(path)
-    policy, version = policy_and_version(path)
     if path.suffix.lower() == ".pdf":
         lines = _pdf_lines(path)
         fmt = "pdf"
     else:
         lines = _docx_lines(path)
         fmt = "docx"
+    policy, version = policy_and_version_from_lines(lines)
     blocks = blocks_from_lines(lines)
     log(
         "reader",

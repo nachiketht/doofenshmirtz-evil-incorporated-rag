@@ -19,10 +19,10 @@ def record():
 def test_validator_passes_a_complete_record(caplog):
     caplog.set_level(logging.INFO, logger="ingest")
     assert validate(record()) is None
-    assert "attempt=1 pass" in caplog.text
+    assert "pass" in caplog.text
 
 
-def test_validator_retries_once_when_version_is_missing(caplog):
+def test_validator_returns_an_error_when_version_is_missing(caplog):
     broken = record()
     del broken["version"]
     caplog.set_level(logging.INFO, logger="ingest")
@@ -31,6 +31,5 @@ def test_validator_retries_once_when_version_is_missing(caplog):
         entry for entry in caplog.records if "missing field: version" in entry.message
     ]
     assert error == "missing field: version"
-    assert "attempt=1" in failures[0].message
-    assert "attempt=2" in failures[1].message
-    assert error in failures[1].message
+    assert len(failures) == 1
+    assert error in failures[0].message

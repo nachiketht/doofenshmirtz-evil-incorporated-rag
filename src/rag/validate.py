@@ -21,12 +21,10 @@ def _missing_field(record):
 
 
 def validate(record):
-    error = None
-    for attempt in (1, 2):
-        field = _missing_field(record)
-        if field is None:
-            log("validate", f"id={record.get('id')} attempt={attempt} pass")
-            return None
-        error = f"missing field: {field}"
-        log("validate", f"id={record.get('id')} attempt={attempt} {error}")
+    field = _missing_field(record)
+    if field is None:
+        log("validate", f"id={record.get('id')} pass")
+        return None
+    error = f"missing field: {field}"
+    log("validate", f"id={record.get('id')} {error}")
     return error
