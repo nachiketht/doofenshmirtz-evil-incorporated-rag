@@ -1,0 +1,101 @@
+import logging
+from pathlib import Path
+
+import pytest
+
+from rag.database import Database
+from rag.ingest import ingest, main
+
+DOCS = Path(__file__).resolve().parents[1] / "docs"
+
+
+class FakeEmbedder:
+    def __init__(self):
+        self.tasks = []
+
+    def embed(self, texts, task):
+        self.tasks.append(task)
+        return [[float(index), 1.0] for index, _ in enumerate(texts)]
+
+
+def test_ingest_stores_pdf_and_docx_versions(tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="ingest")
+    embedder = FakeEmbedder()
+    database = Database(tmp_path / "chroma")
+
+    assert ingest(DOCS, embedder, database) is None
+    first = database.collection.count()
+    assert first > 0
+    stored = database.collection.get(include=["metadatas"])
+    sources = {meta["source"] for meta in stored["metadatas"]}
+    versions: dict[str, set[str]] = {}
+    for meta in stored["metadatas"]:
+        versions.setdefault(meta["policy"], set()).add(meta["version"])
+
+    assert any(name.endswith(".pdf") for name in sources)
+    assert any(name.endswith(".docx") for name in sources)
+    assert versions["HR Policy"] == {"1.0", "2.0"}
+    assert versions["Preparedness Policy"] == {"1.0", "2.0"}
+    assert versions["Time and Usage Policy"] == {"1.0", "2.0"}
+    assert versions["Health Policy"] == {"1.0"}
+    assert embedder.tasks == ["document"]
+
+    assert ingest(DOCS, embedder, database) is None
+    assert database.collection.count() == first
+    assert "files=7" in caplog.text
+    assert "finished" in caplog.text
+
+
+def test_empty_directory_errors(tmp_path):
+    embedder = FakeEmbedder()
+    database = Database(tmp_path / "chroma")
+    with pytest.raises(ValueError, match="no policy files"):
+        ingest(tmp_path, embedder, database)
+
+
+def test_validation_failure_stores_nothing(tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="ingest")
+    embedder = FakeEmbedder()
+    database = Database(tmp_path / "chroma")
+
+    def bad_chunk(path, lines):
+        return [
+            {
+                "id": "bad",
+                "text": "text",
+                "policy": "HR Policy",
+                "section": "1. Purpose",
+                "heading_path": "1. Purpose",
+                "parent_id": "HR Policy|2.0|1. Purpose",
+                "source": Path(path).name,
+                "chunk_index": 0,
+                "word_count": 1,
+            }
+        ]
+
+    error = ingest(DOCS, embedder, database, chunk_file=bad_chunk)
+    assert error == "missing field: version"
+    assert database.collection.count() == 0
+    assert embedder.tasks == []
+
+
+def test_main_defaults_and_validation_exit(monkeypatch, capsys, tmp_path):
+    seen = {}
+
+    def fake_ingest(directory, embedder, database):
+        seen["directory"] = directory
+        seen["database"] = database
+        return None
+
+    monkeypatch.setattr("rag.ingest.Embedder", FakeEmbedder)
+    monkeypatch.setattr("rag.ingest.Database", lambda path: path)
+    monkeypatch.setattr("rag.ingest.ingest", fake_ingest)
+    assert main([]) == 0
+    assert seen["directory"] == "docs"
+    assert seen["database"] == "chroma"
+
+    monkeypatch.setattr(
+        "rag.ingest.ingest", lambda *args, **kwargs: "missing field: version"
+    )
+    assert main(["docs", str(tmp_path / "chroma")]) == 1
+    assert "missing field: version" in capsys.readouterr().out
