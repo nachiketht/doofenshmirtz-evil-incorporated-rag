@@ -78,7 +78,7 @@ def test_a_record_that_fails_validation_twice_is_not_stored(tmp_path, caplog):
 
 
 def test_main_returns_the_validation_error(monkeypatch, capsys):
-    monkeypatch.setattr("rag.ingest.Embedder", lambda: FakeEmbedder())
+    monkeypatch.setattr("rag.ingest.EmbeddingsAdapter", lambda: FakeEmbedder())
     monkeypatch.setattr("rag.ingest.Database", lambda path: object())
     monkeypatch.setattr(
         "rag.ingest.ingest", lambda *args, **kwargs: "missing field: version"
@@ -88,7 +88,7 @@ def test_main_returns_the_validation_error(monkeypatch, capsys):
 
 
 def test_main_ingests_the_policy_directory(tmp_path, monkeypatch):
-    monkeypatch.setattr("rag.ingest.Embedder", FakeEmbedder)
+    monkeypatch.setattr("rag.ingest.EmbeddingsAdapter", FakeEmbedder)
     assert main([str(DOCS), str(tmp_path / "chroma")]) == 0
 
 
@@ -101,7 +101,7 @@ def test_main_defaults_to_docs_and_chroma(monkeypatch):
         return None
 
     monkeypatch.setattr(sys, "argv", ["ingest.py"])
-    monkeypatch.setattr("rag.ingest.Embedder", FakeEmbedder)
+    monkeypatch.setattr("rag.ingest.EmbeddingsAdapter", FakeEmbedder)
     monkeypatch.setattr("rag.ingest.Database", lambda path: path)
     monkeypatch.setattr("rag.ingest.ingest", fake_ingest)
     assert main() == 0

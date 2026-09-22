@@ -3,7 +3,7 @@ from pathlib import Path
 
 from rag.chunker import chunk_path
 from rag.database import Database
-from rag.embeddings import Embedder
+from rag.embeddings import EmbeddingsAdapter
 from rag.reader import log, read
 from rag.validate import validate
 
@@ -39,7 +39,7 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     directory = argv[0] if argv else "docs"
     db_path = argv[1] if len(argv) > 1 else "chroma"
-    error = ingest(directory, embedder=Embedder(), database=Database(db_path))
+    error = ingest(directory, embedder=EmbeddingsAdapter(), database=Database(db_path))
     if error:
         print(error)
         return 1
