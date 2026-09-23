@@ -1,0 +1,40 @@
+[project]
+name = "doofenshmirtz-evil-incorporated-rag"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb",
+    "pypdf",
+    "python-docx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+gemma = [
+    "sentence-transformers",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--cov --cov-report=term-missing --cov-fail-under=100 -m 'not gemma'"
+markers = ["gemma: calls the real EmbeddingGemma model"]
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", "docs/*"]
+
+[tool.ruff]
+target-version = "py312"
