@@ -1,11 +1,10 @@
-"""Persist leaf embeddings in Chroma and every node in the docstore."""
+"""Persist leaf embeddings in Chroma. Parent text is stored on each leaf."""
 
 from __future__ import annotations
 
 import json
 
 from llama_index.core.schema import MetadataMode, TextNode
-from llama_index.core.storage.docstore import SimpleDocumentStore
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 import chromadb
@@ -26,7 +25,6 @@ class PolicyIndex:
             metadata=COLLECTION_METADATA,
         )
         self._vector_store = ChromaVectorStore(chroma_collection=self._collection)
-        self._docstore = self._load_docstore()
         self._dimension_checked = False
 
     def sync(self, policy_id: str, nodes: list[TextNode]) -> None:
@@ -46,8 +44,6 @@ class PolicyIndex:
         self._delete_policy_leaves(policy_id)
         if leaves:
             self._vector_store.add(leaves)
-        self._replace_docstore(policy_id, nodes)
-        self._docstore.persist(persist_path=str(self.settings.docstore_path))
 
     def _ensure_dimension(self, dimension: int | None = None) -> None:
         if dimension is None:
@@ -97,18 +93,6 @@ class PolicyIndex:
         ids = existing.get("ids") or []
         if ids:
             self._vector_store.delete_nodes(node_ids=ids)
-
-    def _replace_docstore(self, policy_id: str, nodes: list[TextNode]) -> None:
-        for node_id, node in list(self._docstore.docs.items()):
-            if node.metadata.get("policy_id") == policy_id:
-                self._docstore.delete_document(node_id, raise_error=False)
-        if nodes:
-            self._docstore.add_documents(nodes, allow_update=True)
-
-    def _load_docstore(self) -> SimpleDocumentStore:
-        if self.settings.docstore_path.exists():
-            return SimpleDocumentStore.from_persist_path(str(self.settings.docstore_path))
-        return SimpleDocumentStore()
 
 
 def _body(text: str) -> str:

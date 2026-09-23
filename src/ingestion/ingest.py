@@ -1,4 +1,4 @@
-"""Ingest policy documents into Chroma and the parent docstore."""
+"""Ingest policy documents into Chroma."""
 
 from __future__ import annotations
 
@@ -28,22 +28,36 @@ def main() -> None:
 
 
 def _print_summary(policy_id: str, nodes: list[TextNode]) -> None:
-    representatives = [
-        node
-        for node in nodes
-        if node.metadata.get("node_role") == "parent" or not node.metadata.get("parent_id")
-    ]
+    representatives = _section_representatives(nodes)
     counts: Counter[str] = Counter()
     for node in representatives:
         status = node.metadata.get("change_status") or "v1"
         counts[status] += 1
-    parents = sum(1 for node in nodes if node.metadata.get("node_role") == "parent")
+    parent_ids = {
+        node.metadata["parent_id"]
+        for node in nodes
+        if node.metadata.get("parent_id")
+    }
+    parents = len(parent_ids)
     leaves = sum(1 for node in nodes if node.metadata.get("node_role") == "leaf")
     print(
         f"{policy_id}: v1={counts['v1']} unchanged={counts['unchanged']} "
         f"added={counts['added']} stale={counts['stale']} "
         f"parents={parents} leaves={leaves}"
     )
+
+
+def _section_representatives(nodes: list[TextNode]) -> list[TextNode]:
+    """One node per section, so a split section is not counted once per leaf."""
+    seen: set[str] = set()
+    representatives: list[TextNode] = []
+    for node in nodes:
+        key = node.metadata.get("parent_id") or node.node_id
+        if key in seen:
+            continue
+        seen.add(key)
+        representatives.append(node)
+    return representatives
 
 
 if __name__ == "__main__":

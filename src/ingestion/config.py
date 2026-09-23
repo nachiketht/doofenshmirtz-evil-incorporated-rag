@@ -10,7 +10,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS_DIR = REPO_ROOT / "docs"
 STORAGE_DIR = REPO_ROOT / "storage"
 CHROMA_DIR = STORAGE_DIR / "chroma"
-DOCSTORE_PATH = STORAGE_DIR / "docstore.json"
 
 COLLECTION_NAME = "dei_policies"
 COLLECTION_METADATA = {"hnsw:space": "cosine"}
@@ -29,7 +28,6 @@ class Settings:
     docs_dir: Path = DOCS_DIR
     storage_dir: Path = STORAGE_DIR
     chroma_dir: Path = CHROMA_DIR
-    docstore_path: Path = DOCSTORE_PATH
     collection_name: str = COLLECTION_NAME
     ollama_base_url: str = DEFAULT_OLLAMA_BASE_URL
     embed_model: str = DEFAULT_EMBED_MODEL

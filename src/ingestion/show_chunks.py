@@ -5,44 +5,49 @@ from __future__ import annotations
 import json
 
 import chromadb
-from llama_index.core.schema import NodeRelationship, TextNode
-from llama_index.core.storage.docstore import SimpleDocumentStore
+from llama_index.core.schema import TextNode
+from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from ingestion.config import Settings
 
 
 def main() -> None:
     settings = Settings.from_env()
-    if not settings.docstore_path.exists():
-        raise FileNotFoundError(f"No docstore at {settings.docstore_path}. Ingest first.")
-    store = SimpleDocumentStore.from_persist_path(str(settings.docstore_path))
-    nodes = [node for node in store.docs.values() if isinstance(node, TextNode)]
-    _print_counts(settings, nodes)
+    nodes = _load_leaves(settings)
+    _print_counts(nodes)
     for node in _sample(nodes):
         print(json.dumps(_chunk(node), indent=2, ensure_ascii=False))
         print()
 
 
-def _print_counts(settings: Settings, nodes: list[TextNode]) -> None:
-    parents = sum(1 for node in nodes if node.metadata.get("node_role") == "parent")
-    leaves = sum(1 for node in nodes if node.metadata.get("node_role") == "leaf")
-    chroma_leaves = _chroma_leaf_count(settings)
+def _load_leaves(settings: Settings) -> list[TextNode]:
+    if not settings.chroma_dir.exists():
+        raise FileNotFoundError(
+            f"No Chroma index at {settings.chroma_dir}. Ingest first."
+        )
+    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
+    try:
+        collection = client.get_collection(settings.collection_name)
+    except Exception as exc:
+        raise FileNotFoundError(
+            f"No collection {settings.collection_name!r} in {settings.chroma_dir}. "
+            "Ingest first."
+        ) from exc
+    store = ChromaVectorStore(chroma_collection=collection)
+    nodes = store.get_nodes(node_ids=None)
+    return [node for node in nodes if isinstance(node, TextNode)]
+
+
+def _print_counts(nodes: list[TextNode]) -> None:
+    with_parent = sum(1 for node in nodes if node.metadata.get("parent"))
     print(f"chunks: {len(nodes)}")
-    print(f"leaves: {leaves} in the docstore, {chroma_leaves} embedded in Chroma")
-    print(f"parents: {parents} in the docstore")
+    print(f"leaves: {len(nodes)} embedded in Chroma")
+    print(f"leaves carrying a parent: {with_parent}")
     print()
 
 
-def _chroma_leaf_count(settings: Settings) -> int:
-    if not settings.chroma_dir.exists():
-        return 0
-    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-    collection = client.get_collection(settings.collection_name)
-    return collection.count()
-
-
 def _sample(nodes: list[TextNode], limit: int = 4) -> list[TextNode]:
-    """One parent, one added leaf, one stale leaf, and one current leaf."""
+    """One leaf with a parent, one added, one stale, and one current leaf."""
     chosen: list[TextNode] = []
     seen: set[str] = set()
 
@@ -56,10 +61,10 @@ def _sample(nodes: list[TextNode], limit: int = 4) -> list[TextNode]:
             seen.add(node.node_id)
             return
 
-    take(lambda node: node.metadata.get("node_role") == "parent")
+    take(lambda node: bool(node.metadata.get("parent")))
     take(lambda node: node.metadata.get("change_status") == "added")
     take(lambda node: node.metadata.get("change_status") == "stale")
-    take(lambda node: node.metadata.get("node_role") == "leaf" and not node.metadata.get("change_status"))
+    take(lambda node: not node.metadata.get("change_status"))
     for node in nodes:
         if len(chosen) >= limit:
             break
@@ -70,18 +75,10 @@ def _sample(nodes: list[TextNode], limit: int = 4) -> list[TextNode]:
 
 
 def _chunk(node: TextNode) -> dict:
-    parent = node.relationships.get(NodeRelationship.PARENT)
-    children = node.relationships.get(NodeRelationship.CHILD) or []
-    if not isinstance(children, list):
-        children = [children]
     return {
         "id": node.node_id,
-        "embedding": None if node.metadata.get("node_role") == "parent" else [],
+        "embedding": [],
         "text": node.get_content(),
-        "relationships": {
-            "parent": parent.node_id if parent is not None else None,
-            "children": [child.node_id for child in children],
-        },
         "metadata": node.metadata,
     }
 

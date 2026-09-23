@@ -1,11 +1,11 @@
-"""Build hierarchical parent and leaf nodes for one policy section."""
+"""Build leaf nodes for one policy section, with the parent text on each leaf."""
 
 from __future__ import annotations
 
 import re
 
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.schema import NodeRelationship, RelatedNodeInfo, TextNode
+from llama_index.core.schema import TextNode
 
 from ingestion.config import FALLBACK_CHUNK_OVERLAP, FALLBACK_CHUNK_TOKENS, LEAF_WORD_LIMIT
 from ingestion.load import PolicyVersion, Section
@@ -23,11 +23,11 @@ def section_nodes(
     version: str,
     change_status: str,
 ) -> list[TextNode]:
-    """Return the parent (when the section has children) and its leaf nodes.
+    """Return leaf nodes for one section.
 
-    A section with no subsections is a single leaf and has no parent. Leaves
-    longer than 500 words are split, and those pieces stay children of the
-    section parent.
+    A section with no subsections is a single leaf and has an empty parent.
+    When the section has subsections, or a long body is split, every leaf
+    carries the full section text in ``metadata["parent"]``.
     """
     metadata_base = {
         "policy_id": policy.policy_id,
@@ -53,14 +53,14 @@ def section_nodes(
                     "node_role": "leaf",
                     "section_path": section_label,
                     "parent_id": "",
+                    "parent": "",
                 },
-                parent_id=None,
             )
         ]
 
-    parent_body = _parent_body(section)
+    parent_text = _leaf_text(header, _parent_body(section))
     child_specs = _child_specs(policy, section, version, section_slug, header, section_label)
-    children = [
+    return [
         _leaf(
             node_id=spec_id,
             text=spec_text,
@@ -69,25 +69,11 @@ def section_nodes(
                 "node_role": "leaf",
                 "section_path": spec_path,
                 "parent_id": parent_id,
+                "parent": parent_text,
             },
-            parent_id=parent_id,
         )
         for spec_id, spec_text, spec_path in child_specs
     ]
-    parent = TextNode(
-        id_=parent_id,
-        text=_leaf_text(header, parent_body),
-        metadata={
-            **metadata_base,
-            "node_role": "parent",
-            "section_path": section_label,
-            "parent_id": "",
-        },
-        relationships={
-            NodeRelationship.CHILD: [RelatedNodeInfo(node_id=child.node_id) for child in children]
-        },
-    )
-    return [parent, *children]
 
 
 def _child_specs(
@@ -145,17 +131,13 @@ def _needs_split(text: str) -> bool:
     return len(text.split()) > LEAF_WORD_LIMIT
 
 
-def _leaf(
-    *,
-    node_id: str,
-    text: str,
-    metadata: dict[str, str],
-    parent_id: str | None,
-) -> TextNode:
-    relationships = {}
-    if parent_id:
-        relationships[NodeRelationship.PARENT] = RelatedNodeInfo(node_id=parent_id)
-    return TextNode(id_=node_id, text=text, metadata=metadata, relationships=relationships)
+def _leaf(*, node_id: str, text: str, metadata: dict[str, str]) -> TextNode:
+    return TextNode(
+        id_=node_id,
+        text=text,
+        metadata=metadata,
+        excluded_embed_metadata_keys=["parent"],
+    )
 
 
 def _slug(text: str) -> str:
