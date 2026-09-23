@@ -9,3 +9,4 @@ build/
 chroma/
 .ruff_cache/
 explanation.md
+.env
