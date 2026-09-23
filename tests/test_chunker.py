@@ -25,6 +25,13 @@ def test_children_carry_parent_and_heading_path_and_only_children_are_embedded()
     assert parents[0]["id"] == child["parent_id"]
     assert child["heading_path"] == "3. Email Tone Requirement > 3.1 Requirement"
     assert child["section"] == "3. Email Tone Requirement"
+    assert child["text"] == "Every email starts with a joke."
+    assert "Email Tone" not in child["text"]
+    assert child["embed_text"] == (
+        "HR Policy v2.0\n"
+        "3. Email Tone Requirement > 3.1 Requirement\n"
+        "Every email starts with a joke."
+    )
     assert all(record["embed"] for record in children)
     assert parents and all(not record["embed"] for record in parents)
 
@@ -34,6 +41,12 @@ def test_children_carry_parent_and_heading_path_and_only_children_are_embedded()
         if record["heading_path"] == "6. Boss Error Grace Period"
     )
     assert leaf["parent_id"] == "HR Policy|2.0"
+    assert leaf["word_count"] == 3
+    assert leaf["text"] == "Wait 30 minutes."
+    assert "Boss Error" not in leaf["text"]
+    assert leaf["embed_text"] == (
+        "HR Policy v2.0\n6. Boss Error Grace Period\nWait 30 minutes."
+    )
 
 
 def test_the_same_policy_version_and_heading_path_always_make_the_same_id():

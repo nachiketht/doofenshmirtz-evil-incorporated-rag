@@ -1,54 +1,32 @@
-import logging
 import re
 from pathlib import Path
 
-from pypdf import PdfReader
-from docx import Document
+from llama_index.core import SimpleDirectoryReader
 
-logger = logging.getLogger("ingest")
+from rag.logutil import log
+
+SUPPORTED = {".pdf", ".docx"}
 SECTION = re.compile(r"^(\d+)\.\s+(.*)$")
 SUBSECTION = re.compile(r"^(\d+\.\d+(?:\.\d+)*)\s+(.*)$")
-TITLE = re.compile(r"^(.+?)\s+[—–-]\s+Version\s+(\d+\.\d+)$")
 
 
-def configure_logging():
-    logger.setLevel(logging.INFO)
-    if logger.handlers:
-        return
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    logger.addHandler(handler)
+def policy_and_version(path: Path | str) -> tuple[str, str]:
+    stem = Path(path).stem
+    policy, version = stem.rsplit(" v", 1)
+    policy = policy.split(" - ", 1)[1]
+    return policy, version
 
 
-def log(step, message):
-    configure_logging()
-    logger.info("%s %s", step, message)
+def _load_text(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix not in SUPPORTED:
+        raise ValueError(f"unsupported suffix: {suffix}")
+    documents = SimpleDirectoryReader(input_files=[str(path)]).load_data()
+    return "\n".join((doc.text or "") for doc in documents).strip()
 
 
-def policy_and_version_from_lines(lines):
-    for raw in lines:
-        line = " ".join(raw.split())
-        if not line:
-            continue
-        if SECTION.match(line) or SUBSECTION.match(line):
-            break
-        match = TITLE.match(line)
-        if match:
-            return match.group(1), match.group(2)
-    raise ValueError("policy and version are missing from the document")
-
-
-def policy_and_version(path):
-    path = Path(path)
-    if path.suffix.lower() == ".pdf":
-        lines = _pdf_lines(path)
-    else:
-        lines = _docx_lines(path)
-    return policy_and_version_from_lines(lines)
-
-
-def blocks_from_lines(lines):
-    blocks = []
+def blocks_from_lines(lines: list[str]) -> list[dict]:
+    blocks: list[dict] = []
     for raw in lines:
         line = " ".join(raw.split())
         if not line:
@@ -73,29 +51,27 @@ def blocks_from_lines(lines):
     return blocks
 
 
-def _pdf_lines(path):
-    reader = PdfReader(str(path))
-    text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    return text.splitlines()
-
-
-def _docx_lines(path):
-    document = Document(str(path))
-    return [paragraph.text for paragraph in document.paragraphs]
-
-
-def read(path):
+def read(path: Path | str) -> dict:
     path = Path(path)
-    if path.suffix.lower() == ".pdf":
-        lines = _pdf_lines(path)
-        fmt = "pdf"
-    else:
-        lines = _docx_lines(path)
-        fmt = "docx"
-    policy, version = policy_and_version_from_lines(lines)
+    suffix = path.suffix.lower()
+    if suffix not in SUPPORTED:
+        raise ValueError(f"unsupported suffix: {suffix}")
+    policy, version = policy_and_version(path)
+    text = _load_text(path)
+    if not text.strip():
+        raise ValueError(f"empty extract: {path.name}")
+    lines = text.splitlines()
     blocks = blocks_from_lines(lines)
+    fmt = path.suffix.lower().lstrip(".")
     log(
         "reader",
-        f"file={path.name} format={fmt} policy={policy} version={version} blocks={len(blocks)}",
+        f"file={path.name} format={fmt} policy={policy} version={version} "
+        f"lines={len(lines)} blocks={len(blocks)}",
     )
-    return blocks
+    return {
+        "policy": policy,
+        "version": version,
+        "source": path.name,
+        "lines": lines,
+        "blocks": blocks,
+    }

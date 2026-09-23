@@ -3,33 +3,34 @@ import logging
 from rag.validate import validate
 
 
-def record():
-    return {
-        "id": "HR Policy|2.0|1. Purpose",
-        "text": "This policy stands on its own.",
+def _record(**overrides):
+    base = {
+        "id": "HR Policy|1.0|1. Purpose",
+        "text": "Purpose text",
         "policy": "HR Policy",
-        "version": "2.0",
+        "version": "1.0",
         "section": "1. Purpose",
         "heading_path": "1. Purpose",
-        "parent_id": "HR Policy|2.0",
-        "source": "Doofenshmirtz Evil Inc - HR Policy v2.0.docx",
+        "parent_id": "HR Policy|1.0",
+        "source": "hr.pdf",
+        "embed_text": "HR Policy v1.0\n1. Purpose\nPurpose text",
+        "word_count": 2,
+        "embed": True,
     }
+    base.update(overrides)
+    return base
 
 
-def test_validator_passes_a_complete_record(caplog):
+def test_valid_record_passes(caplog):
     caplog.set_level(logging.INFO, logger="ingest")
-    assert validate(record()) is None
+    assert validate(_record()) is None
     assert "pass" in caplog.text
 
 
-def test_validator_returns_an_error_when_version_is_missing(caplog):
-    broken = record()
-    del broken["version"]
+def test_missing_field_fails_after_two_attempts(caplog):
     caplog.set_level(logging.INFO, logger="ingest")
-    error = validate(broken)
-    failures = [
-        entry for entry in caplog.records if "missing field: version" in entry.message
-    ]
+    error = validate(_record(version=""))
     assert error == "missing field: version"
-    assert len(failures) == 1
-    assert error in failures[0].message
+    failures = [r for r in caplog.records if "missing field: version" in r.message]
+    assert len(failures) == 2
+    assert "attempt=2" in failures[1].message

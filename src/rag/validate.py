@@ -1,30 +1,24 @@
-from rag.reader import log
+from pydantic import ValidationError
 
-FIELDS = (
-    "id",
-    "text",
-    "policy",
-    "version",
-    "section",
-    "heading_path",
-    "parent_id",
-    "source",
-)
+from rag.logutil import log
+from rag.models import Chunk
 
 
-def _missing_field(record):
-    for field in FIELDS:
-        value = record.get(field)
-        if not isinstance(value, str) or not value.strip():
-            return field
-    return None
+def _field_name(exc: ValidationError) -> str:
+    loc = exc.errors()[0]["loc"]
+    return str(loc[0]) if loc else "record"
 
 
-def validate(record):
-    field = _missing_field(record)
-    if field is None:
-        log("validate", f"id={record.get('id')} pass")
+def validate(record: dict) -> str | None:
+    error = None
+    for attempt in (1, 2):
+        try:
+            Chunk.model_validate(record)
+        except ValidationError as exc:
+            field = _field_name(exc)
+            error = f"missing field: {field}"
+            log("validate", f"id={record.get('id')} attempt={attempt} {error}")
+            continue
+        log("validate", f"id={record.get('id')} attempt={attempt} pass")
         return None
-    error = f"missing field: {field}"
-    log("validate", f"id={record.get('id')} {error}")
     return error

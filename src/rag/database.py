@@ -1,11 +1,12 @@
 import chromadb
 from chromadb.config import Settings
 
-from rag.reader import log
+from rag.config import COLLECTION_NAME
+from rag.logutil import log
 
 
 class Database:
-    def __init__(self, path, name="policies"):
+    def __init__(self, path, name: str = COLLECTION_NAME):
         self.path = str(path)
         self.client = chromadb.PersistentClient(
             path=self.path,
@@ -16,7 +17,7 @@ class Database:
             metadata={"hnsw:space": "cosine"},
         )
 
-    def upsert(self, records, vectors):
+    def upsert(self, records: list[dict], vectors: list[list[float]]) -> None:
         self.collection.upsert(
             ids=[record["id"] for record in records],
             documents=[record["text"] for record in records],
@@ -29,6 +30,7 @@ class Database:
                     "heading_path": record["heading_path"],
                     "parent_id": record["parent_id"],
                     "source": record["source"],
+                    "word_count": record["word_count"],
                 }
                 for record in records
             ],
