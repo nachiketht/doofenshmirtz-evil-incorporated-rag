@@ -1,0 +1,9 @@
+pyproject.toml
+src/adapter/__init__.py
+src/dei_rag.egg-info/PKG-INFO
+src/dei_rag.egg-info/SOURCES.txt
+src/dei_rag.egg-info/dependency_links.txt
+src/dei_rag.egg-info/requires.txt
+src/dei_rag.egg-info/top_level.txt
+src/ingestion/__init__.py
+src/ingestion/config.py
