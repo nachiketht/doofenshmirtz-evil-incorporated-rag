@@ -5,16 +5,17 @@ from rag.validate import validate
 
 def _record(**overrides):
     base = {
-        "id": "HR Policy|1.0|1. Purpose|0",
+        "id": "HR Policy|1.0|1. Purpose",
         "text": "Purpose text",
         "policy": "HR Policy",
         "version": "1.0",
         "section": "1. Purpose",
         "heading_path": "1. Purpose",
-        "parent_id": "HR Policy|1.0|1. Purpose",
+        "parent_id": "HR Policy|1.0",
         "source": "hr.pdf",
-        "chunk_index": 0,
+        "embed_text": "HR Policy v1.0\n1. Purpose\nPurpose text",
         "word_count": 2,
+        "embed": True,
     }
     base.update(overrides)
     return base

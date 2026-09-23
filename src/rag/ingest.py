@@ -24,8 +24,10 @@ def ingest(directory, embedder, database, read_file=read, chunk_file=chunk_path)
     pending = []
     for path in files:
         loaded = read_file(path)
-        records = chunk_file(path, loaded["lines"])
+        records = chunk_file(path, loaded["blocks"])
         for record in records:
+            if not record.get("embed"):
+                continue
             error = validate(record)
             if error:
                 log("ingest", "failed")
@@ -33,7 +35,7 @@ def ingest(directory, embedder, database, read_file=read, chunk_file=chunk_path)
             pending.append(record)
     if pending:
         vectors = embedder.embed(
-            [record["text"] for record in pending], task="document"
+            [record["embed_text"] for record in pending], task="document"
         )
         database.upsert(pending, vectors)
     log("ingest", "finished")

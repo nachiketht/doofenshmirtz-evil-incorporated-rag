@@ -9,6 +9,7 @@ STRING_FIELDS = (
     "heading_path",
     "parent_id",
     "source",
+    "embed_text",
 )
 
 
@@ -23,8 +24,9 @@ class Chunk(BaseModel):
     heading_path: str
     parent_id: str
     source: str
-    chunk_index: int
+    embed_text: str
     word_count: int
+    embed: bool
 
     @field_validator(*STRING_FIELDS)
     @classmethod

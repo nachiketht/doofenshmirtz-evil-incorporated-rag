@@ -1,56 +1,56 @@
-from rag.chunker import chunk, make_id, window_words
+from rag.chunker import chunk, make_id
 
 
-def test_ids_are_stable():
-    first = make_id("HR Policy", "2.0", "3. Email Tone Requirement", 0)
-    second = make_id("HR Policy", "2.0", "3. Email Tone Requirement", 0)
+def test_children_carry_parent_and_heading_path_and_only_children_are_embedded():
+    blocks = [
+        {"level": 1, "heading": "3. Email Tone Requirement", "text": ""},
+        {
+            "level": 2,
+            "heading": "3.1 Requirement",
+            "text": "Every email starts with a joke.",
+        },
+        {
+            "level": 1,
+            "heading": "6. Boss Error Grace Period",
+            "text": "Wait 30 minutes.",
+        },
+    ]
+    records = chunk(blocks, "HR Policy", "2.0", "HR Policy v2.0.docx")
+    children = [record for record in records if record["embed"]]
+    parents = [record for record in records if not record["embed"]]
+
+    child = next(
+        record for record in children if "3.1 Requirement" in record["heading_path"]
+    )
+    assert parents[0]["id"] == child["parent_id"]
+    assert child["heading_path"] == "3. Email Tone Requirement > 3.1 Requirement"
+    assert child["section"] == "3. Email Tone Requirement"
+    assert child["text"] == "Every email starts with a joke."
+    assert "Email Tone" not in child["text"]
+    assert child["embed_text"] == (
+        "HR Policy v2.0\n"
+        "3. Email Tone Requirement > 3.1 Requirement\n"
+        "Every email starts with a joke."
+    )
+    assert all(record["embed"] for record in children)
+    assert parents and all(not record["embed"] for record in parents)
+
+    leaf = next(
+        record
+        for record in children
+        if record["heading_path"] == "6. Boss Error Grace Period"
+    )
+    assert leaf["parent_id"] == "HR Policy|2.0"
+    assert leaf["word_count"] == 3
+    assert leaf["text"] == "Wait 30 minutes."
+    assert "Boss Error" not in leaf["text"]
+    assert leaf["embed_text"] == (
+        "HR Policy v2.0\n6. Boss Error Grace Period\nWait 30 minutes."
+    )
+
+
+def test_the_same_policy_version_and_heading_path_always_make_the_same_id():
+    first = make_id("HR Policy", "2.0", "3. Email Tone Requirement > 3.1 Requirement")
+    second = make_id("HR Policy", "2.0", "3. Email Tone Requirement > 3.1 Requirement")
     assert first == second
-    assert first == "HR Policy|2.0|3. Email Tone Requirement|0"
-
-
-def test_document_at_or_under_300_words_is_one_chunk():
-    words = [f"w{i}" for i in range(300)]
-    windows = window_words(words, size=300, overlap=60)
-    assert len(windows) == 1
-    assert windows[0] == words
-
-
-def test_360_words_yield_two_windows_sharing_60_words():
-    words = [f"w{i}" for i in range(360)]
-    windows = window_words(words, size=300, overlap=60)
-    assert len(windows) == 2
-    assert windows[0] == words[:300]
-    assert windows[1] == words[240:360]
-    assert windows[0][-60:] == windows[1][:60]
-
-
-def test_short_paragraphs_still_overlap_when_packed():
-    para_a = " ".join(f"a{i}" for i in range(200))
-    para_b = " ".join(f"b{i}" for i in range(200))
-    lines = [
-        "1. Purpose",
-        para_a,
-        "2. Scope",
-        para_b,
-    ]
-    records = chunk(lines, "HR Policy", "1.0", "hr.pdf")
-    assert len(records) == 2
-    first_words = records[0]["text"].split()
-    second_words = records[1]["text"].split()
-    assert first_words[-60:] == second_words[:60]
-    assert records[0]["heading_path"] == "1. Purpose"
-    assert records[0]["section"] == "1. Purpose"
-    assert records[1]["heading_path"] == "2. Scope"
-    assert records[0]["chunk_index"] == 0
-    assert records[1]["chunk_index"] == 1
-    assert records[0]["parent_id"] == "HR Policy|1.0|1. Purpose"
-
-
-def test_heading_path_includes_subsection():
-    lines = [
-        "3. Email Tone Requirement",
-        "3.1 Requirement. Every email starts with a joke.",
-    ]
-    records = chunk(lines, "HR Policy", "2.0", "HR Policy v2.0.docx")
-    assert records[0]["heading_path"] == "3. Email Tone Requirement > 3.1 Requirement"
-    assert records[0]["section"] == "3. Email Tone Requirement"
+    assert first == "HR Policy|2.0|3. Email Tone Requirement > 3.1 Requirement"

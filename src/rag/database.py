@@ -30,7 +30,6 @@ class Database:
                     "heading_path": record["heading_path"],
                     "parent_id": record["parent_id"],
                     "source": record["source"],
-                    "chunk_index": record["chunk_index"],
                     "word_count": record["word_count"],
                 }
                 for record in records

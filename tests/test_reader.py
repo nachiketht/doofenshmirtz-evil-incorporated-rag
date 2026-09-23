@@ -27,6 +27,13 @@ def test_read_pdf_and_docx_return_lines_and_metadata():
     assert docx["version"] == "2.0"
     assert docx["source"].endswith(".docx")
     assert len(docx["lines"]) > 5
+    purpose = next(block for block in pdf["blocks"] if block["heading"] == "1. Purpose")
+    child = next(
+        block for block in pdf["blocks"] if block["heading"] == "3.1 Requirement"
+    )
+    assert purpose["level"] == 1
+    assert child["level"] == 2
+    assert purpose["text"]
 
 
 def test_unsupported_suffix_is_rejected(tmp_path):

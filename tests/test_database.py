@@ -1,18 +1,19 @@
 from rag.database import Database
 
 
-def _record(chunk_index: int = 0) -> dict:
+def _record() -> dict:
     return {
-        "id": f"HR Policy|1.0|1. Purpose|{chunk_index}",
+        "id": "HR Policy|1.0|1. Purpose",
         "text": "Purpose body",
         "policy": "HR Policy",
         "version": "1.0",
         "section": "1. Purpose",
         "heading_path": "1. Purpose",
-        "parent_id": "HR Policy|1.0|1. Purpose",
+        "parent_id": "HR Policy|1.0",
         "source": "hr.pdf",
-        "chunk_index": chunk_index,
+        "embed_text": "HR Policy v1.0\n1. Purpose\nPurpose body",
         "word_count": 2,
+        "embed": True,
     }
 
 

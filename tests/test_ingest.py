@@ -12,9 +12,11 @@ DOCS = Path(__file__).resolve().parents[1] / "docs"
 class FakeEmbedder:
     def __init__(self):
         self.tasks = []
+        self.texts = []
 
     def embed(self, texts, task):
         self.tasks.append(task)
+        self.texts.extend(texts)
         return [[float(index), 1.0] for index, _ in enumerate(texts)]
 
 
@@ -26,7 +28,7 @@ def test_ingest_stores_pdf_and_docx_versions(tmp_path, caplog):
     assert ingest(DOCS, embedder, database) is None
     first = database.collection.count()
     assert first > 0
-    stored = database.collection.get(include=["metadatas"])
+    stored = database.collection.get(include=["metadatas", "documents"])
     sources = {meta["source"] for meta in stored["metadatas"]}
     versions: dict[str, set[str]] = {}
     for meta in stored["metadatas"]:
@@ -39,6 +41,10 @@ def test_ingest_stores_pdf_and_docx_versions(tmp_path, caplog):
     assert versions["Time and Usage Policy"] == {"1.0", "2.0"}
     assert versions["Health Policy"] == {"1.0"}
     assert embedder.tasks == ["document"]
+    assert any(
+        "1. Purpose" in payload or "Dress Code" in payload for payload in embedder.texts
+    )
+    assert all(not doc.startswith("HR Policy v") for doc in stored["documents"])
 
     assert ingest(DOCS, embedder, database) is None
     assert database.collection.count() == first
@@ -58,7 +64,7 @@ def test_validation_failure_stores_nothing(tmp_path, caplog):
     embedder = FakeEmbedder()
     database = Database(tmp_path / "chroma")
 
-    def bad_chunk(path, lines):
+    def bad_chunk(path, blocks):
         return [
             {
                 "id": "bad",
@@ -66,10 +72,11 @@ def test_validation_failure_stores_nothing(tmp_path, caplog):
                 "policy": "HR Policy",
                 "section": "1. Purpose",
                 "heading_path": "1. Purpose",
-                "parent_id": "HR Policy|2.0|1. Purpose",
+                "parent_id": "HR Policy|2.0",
                 "source": Path(path).name,
-                "chunk_index": 0,
+                "embed_text": "HR Policy v2.0\n1. Purpose\ntext",
                 "word_count": 1,
+                "embed": True,
             }
         ]
 
