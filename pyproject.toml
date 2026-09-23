@@ -29,11 +29,11 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "--cov=rag --cov-report=term-missing -m 'not ollama'"
+addopts = "--cov=rag --cov=adpater --cov-report=term-missing -m 'not ollama'"
 markers = ["ollama: needs a running local Ollama daemon"]
 
 [tool.coverage.run]
-source = ["rag"]
+source = ["rag", "adpater"]
 omit = ["tests/*"]
 
 [tool.ruff]

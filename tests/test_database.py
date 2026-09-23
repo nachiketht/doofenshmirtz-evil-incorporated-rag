@@ -1,4 +1,4 @@
-from rag.database import Database
+from adpater.database_adapter import DatabaseAdapter
 
 
 def _record() -> dict:
@@ -18,7 +18,7 @@ def _record() -> dict:
 
 
 def test_upsert_is_idempotent_and_keeps_metadata(tmp_path):
-    database = Database(tmp_path / "chroma")
+    database = DatabaseAdapter(tmp_path / "chroma")
     records = [_record()]
     vectors = [[0.1, 0.2]]
     database.upsert(records, vectors)

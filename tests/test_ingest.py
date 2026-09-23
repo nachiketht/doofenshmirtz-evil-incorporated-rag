@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from rag.database import Database
+from adpater.database_adapter import DatabaseAdapter
 from rag.ingest import ingest, main
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
@@ -23,7 +23,7 @@ class FakeEmbedder:
 def test_ingest_stores_pdf_and_docx_versions(tmp_path, caplog):
     caplog.set_level(logging.INFO, logger="ingest")
     embedder = FakeEmbedder()
-    database = Database(tmp_path / "chroma")
+    database = DatabaseAdapter(tmp_path / "chroma")
 
     assert ingest(DOCS, embedder, database) is None
     first = database.collection.count()
@@ -57,7 +57,7 @@ def test_ingest_stores_pdf_and_docx_versions(tmp_path, caplog):
 
 def test_empty_directory_errors(tmp_path):
     embedder = FakeEmbedder()
-    database = Database(tmp_path / "chroma")
+    database = DatabaseAdapter(tmp_path / "chroma")
     with pytest.raises(ValueError, match="no policy files"):
         ingest(tmp_path, embedder, database)
 
@@ -65,7 +65,7 @@ def test_empty_directory_errors(tmp_path):
 def test_validation_failure_stores_nothing(tmp_path, caplog):
     caplog.set_level(logging.INFO, logger="ingest")
     embedder = FakeEmbedder()
-    database = Database(tmp_path / "chroma")
+    database = DatabaseAdapter(tmp_path / "chroma")
 
     def bad_chunk(path, blocks):
         return [
@@ -100,8 +100,8 @@ def test_main_defaults_to_docs_and_chroma(monkeypatch):
         seen["directory"] = directory
         seen["database"] = database
 
-    monkeypatch.setattr("rag.ingest.Embedder", FakeEmbedder)
-    monkeypatch.setattr("rag.ingest.Database", lambda path: path)
+    monkeypatch.setattr("rag.ingest.EmbeddingAdapter", FakeEmbedder)
+    monkeypatch.setattr("rag.ingest.DatabaseAdapter", lambda path: path)
     monkeypatch.setattr("rag.ingest.ingest", fake_ingest)
     assert main([]) == 0
     assert seen["directory"] == "docs"
@@ -109,8 +109,8 @@ def test_main_defaults_to_docs_and_chroma(monkeypatch):
 
 
 def test_main_returns_the_validation_error(monkeypatch, capsys, tmp_path):
-    monkeypatch.setattr("rag.ingest.Embedder", FakeEmbedder)
-    monkeypatch.setattr("rag.ingest.Database", lambda path: object())
+    monkeypatch.setattr("rag.ingest.EmbeddingAdapter", FakeEmbedder)
+    monkeypatch.setattr("rag.ingest.DatabaseAdapter", lambda path: object())
     monkeypatch.setattr(
         "rag.ingest.ingest", lambda *args, **kwargs: "missing field: version"
     )

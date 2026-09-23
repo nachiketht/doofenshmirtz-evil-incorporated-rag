@@ -5,7 +5,7 @@ from rag.config import COLLECTION_NAME
 from rag.logutil import log
 
 
-class Database:
+class DatabaseAdapter:
     def __init__(self, path, name: str = COLLECTION_NAME):
         self.path = str(path)
         self.client = chromadb.PersistentClient(

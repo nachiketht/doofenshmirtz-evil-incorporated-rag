@@ -9,7 +9,7 @@ PREFIX = {
 }
 
 
-class Embedder:
+class EmbeddingAdapter:
     def __init__(self, client=None, model: str | None = None, host: str | None = None):
         self.model = model or EMBED_MODEL
         self.client = client or ollama.Client(host=host or OLLAMA_HOST)
