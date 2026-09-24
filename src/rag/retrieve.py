@@ -6,13 +6,13 @@ from adpater.database_adapter import DatabaseAdapter
 from adpater.embedding_adapter import EmbeddingAdapter
 from adpater.generation_adapter import GenerationAdapter
 from adpater.rerank_adapter import RerankerAdapter
+from rag.generate import generate
 from rag.logutil import log
 from rag.router import route
 
 RRF = 60
 FUSE_N = 20
 TOP_N = 3
-EMPTY = "No matching policy text."
 ALIASES = {
     "Time and Usage Policy": "Time & Usage Policy",
     "Health Policy": "Health & Wellness Policy",
@@ -221,24 +221,6 @@ def apply_rerank(question, items, texts, reranker, n):
     return ordered[:n]
 
 
-def chunk_block(hit: dict) -> str:
-    return f"{hit['policy']} {hit['version']} {hit['heading_path']}\n{hit['text']}"
-
-
-def pair_block(pair: dict) -> str:
-    current = side_text("current", pair["current"])
-    previous = side_text("previous", pair["previous"])
-    return f"{pair['policy']} {pair['heading_path']}\n{current}\n{previous}"
-
-
-def answer(question, hits, model, kind: str) -> str:
-    if not hits:
-        return EMPTY
-    blocks = pair_block if kind == "compare" else chunk_block
-    body = "\n\n".join(blocks(hit) for hit in hits)
-    return model.generate(f"Question: {question}\n\n{body}")
-
-
 def top_ids(hits) -> str:
     ids = []
     for hit in hits:
@@ -249,7 +231,7 @@ def top_ids(hits) -> str:
     return ",".join(ids)
 
 
-def retrieve(question, embedder, model, database, reranker, n=TOP_N) -> str:
+def retrieve(question, embedder, model, database, reranker, n=TOP_N) -> dict:
     rows = fold(database.rows())
     policies = catalog(rows)
     decision = route(question, model, policies)
@@ -266,7 +248,7 @@ def retrieve(question, embedder, model, database, reranker, n=TOP_N) -> str:
     else:
         hits = lookup(question, vector, rows, policies, decision, reranker, n)
     log("retrieve", f"hits={len(hits)} top={top_ids(hits)}")
-    return answer(question, hits, model, kind)
+    return {"kind": kind, "hits": hits}
 
 
 def lookup(question, vector, rows, policies, decision, reranker, n):
@@ -298,13 +280,15 @@ def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     question = argv[0] if argv else ""
     db_path = argv[1] if len(argv) > 1 else "chroma"
-    text = retrieve(
+    model = GenerationAdapter()
+    found = retrieve(
         question,
         embedder=EmbeddingAdapter(),
-        model=GenerationAdapter(),
+        model=model,
         database=DatabaseAdapter(db_path),
         reranker=RerankerAdapter(),
     )
+    text = generate(question, found["kind"], found["hits"], model)
     print(text)
     return 0
 
