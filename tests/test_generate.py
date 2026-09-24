@@ -71,7 +71,8 @@ def test_generate_sends_lookup_passages_with_the_system_prompt():
         ],
         model,
     )
-    assert text == "answer"
+    assert text.startswith("answer\n\n")
+    assert "HR Policy 2.0, 3. Leave" in text
     assert model.calls[0]["system"] == SYSTEM
     assert "Question: who gets cake?" in model.calls[0]["prompt"]
     assert "HR Policy 2.0 3. Leave" in model.calls[0]["prompt"]
@@ -80,24 +81,35 @@ def test_generate_sends_lookup_passages_with_the_system_prompt():
 
 def test_generate_sends_compare_pairs_including_a_missing_side():
     model = RecordingModel()
-    generate(
+    text = generate(
         "what changed?",
         "compare",
         [
             {
                 "policy": "HR Policy",
+                "heading_path": "8. Added",
+                "current": {"version": "2.0", "text": "new clause"},
+                "previous": None,
+            },
+            {
+                "policy": "HR Policy",
                 "heading_path": "3. Leave",
                 "current": {"version": "2.0", "text": "no dessert"},
-                "previous": None,
-            }
+                "previous": {"version": "1.0", "text": "cake"},
+            },
         ],
         model,
     )
+    assert text.startswith("answer\n\n")
+    assert "HR Policy 2.0, 8. Added" in text
+    assert "HR Policy 1.0, 8. Added" not in text
+    assert "HR Policy 2.0, 3. Leave" in text
+    assert "HR Policy 1.0, 3. Leave" in text
     prompt = model.calls[0]["prompt"]
     assert "HR Policy 3. Leave" in prompt
     assert "current 2.0" in prompt
     assert "no dessert" in prompt
-    assert prompt.rstrip().endswith("previous")
+    assert prompt.rstrip().endswith("cake")
 
 
 def test_generate_skips_the_model_when_there_are_no_hits():

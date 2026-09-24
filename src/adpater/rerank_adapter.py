@@ -1,21 +1,21 @@
 import json
-import os
 from urllib.request import Request, urlopen
 
+from rag.config import env_value
 from rag.logutil import log
 
 DEFAULT_RERANK_MODEL = "rerank-v3.5"
 
 
-def cohere_api_key() -> str:
-    key = os.environ.get("COHERE_API_KEY", "")
+def cohere_api_key(path=".env") -> str:
+    key = env_value("COHERE_API_KEY", path=path)
     if not key:
         raise ValueError("COHERE_API_KEY is missing")
     return key
 
 
-def cohere_model_name() -> str:
-    return os.environ.get("COHERE_RERANK_MODEL", DEFAULT_RERANK_MODEL)
+def cohere_model_name(path=".env") -> str:
+    return env_value("COHERE_RERANK_MODEL", DEFAULT_RERANK_MODEL, path)
 
 
 def post_rerank(
@@ -41,9 +41,15 @@ def post_rerank(
 
 
 class RerankerAdapter:
-    def __init__(self, post=None, api_key: str | None = None, model: str | None = None):
-        self.api_key = cohere_api_key() if api_key is None else api_key
-        self.model = model or cohere_model_name()
+    def __init__(
+        self,
+        post=None,
+        api_key: str | None = None,
+        model: str | None = None,
+        env_path=".env",
+    ):
+        self.api_key = cohere_api_key(env_path) if api_key is None else api_key
+        self.model = model or cohere_model_name(env_path)
         self.post = post or post_rerank
 
     def rerank(self, question: str, documents: list[str]) -> list[str]:

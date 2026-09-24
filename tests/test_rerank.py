@@ -24,10 +24,24 @@ def test_adapter_skips_an_empty_document_list(monkeypatch):
     assert RerankerAdapter(post=lambda *args: ["nope"]).rerank("cake", []) == []
 
 
-def test_adapter_fails_when_the_key_is_unset(monkeypatch):
+def test_adapter_fails_when_the_key_is_unset(tmp_path, monkeypatch):
     monkeypatch.delenv("COHERE_API_KEY", raising=False)
     with pytest.raises(ValueError, match="COHERE_API_KEY"):
-        RerankerAdapter()
+        RerankerAdapter(env_path=tmp_path / "missing.env")
+
+
+def test_adapter_reads_the_key_from_the_env_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("COHERE_API_KEY", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text('COHERE_API_KEY="from-file"\n# comment\nignored\n')
+    seen = {}
+
+    def post(api_key, model, question, documents):
+        seen["api_key"] = api_key
+        return documents
+
+    RerankerAdapter(post=post, env_path=env_file).rerank("cake", ["a"])
+    assert seen["api_key"] == "from-file"
 
 
 def test_adapter_uses_the_configured_model(monkeypatch):

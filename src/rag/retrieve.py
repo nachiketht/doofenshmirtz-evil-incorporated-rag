@@ -1,3 +1,4 @@
+import logging
 import math
 import re
 import sys
@@ -7,7 +8,7 @@ from adpater.embedding_adapter import EmbeddingAdapter
 from adpater.generation_adapter import GenerationAdapter
 from adpater.rerank_adapter import RerankerAdapter
 from rag.generate import generate
-from rag.logutil import log
+from rag.logutil import configure_logging, log, logger
 from rag.router import route
 
 RRF = 60
@@ -280,6 +281,10 @@ def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     question = argv[0] if argv else ""
     db_path = argv[1] if len(argv) > 1 else "chroma"
+    configure_logging()
+    for handler in logger.handlers:
+        if handler.name == "console":
+            handler.setLevel(logging.WARNING)
     model = GenerationAdapter()
     found = retrieve(
         question,

@@ -8,6 +8,7 @@ def configure_logging() -> None:
     if logger.handlers:
         return
     handler = logging.StreamHandler()
+    handler.name = "console"
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     logger.addHandler(handler)
 
