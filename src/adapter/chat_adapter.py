@@ -48,6 +48,7 @@ class OllamaChatAdapter:
                     "model": self.model_name,
                     "prompt": prompt,
                     "stream": False,
+                    "think": False,
                     "format": schema if schema is not None else "json",
                 },
                 timeout=self.timeout,

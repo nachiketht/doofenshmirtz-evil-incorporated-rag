@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from dataclasses import asdict, dataclass
 
 from pydantic import ValidationError
@@ -42,7 +43,8 @@ def route(
         return rules
     try:
         return _from_llm(query, llm)
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError, ValidationError):
+    except (OSError, ValueError, RuntimeError, json.JSONDecodeError, ValidationError) as exc:
+        print(f"Router LLM failed ({exc}); using regex fallback.", file=sys.stderr)
         return rules
 
 
@@ -60,7 +62,7 @@ def _from_llm(query: str, llm: OllamaChatAdapter) -> RouteDecision:
         try:
             payload = llm.complete_json(prompt, schema=schema)
             parsed = RouterOutput.model_validate(payload)
-            return _ground(query, RouteDecision(lane=parsed.lane, source="llm"))
+            return RouteDecision(lane=parsed.lane, source="llm")
         except ValidationError as exc:
             error = exc
         except json.JSONDecodeError as exc:
@@ -79,29 +81,26 @@ def _from_llm(query: str, llm: OllamaChatAdapter) -> RouteDecision:
 
 def _prompt(query: str) -> str:
     return (
-        "Is this about the current rule or about an old version / what changed?\n"
-        'Return JSON: {"lane":"current"} or {"lane":"history"}.\n'
-        "Use current unless they ask what changed, what an old version said, or if they are esking anything about the past"
-        "or to compare versions.\n\n"
+        "Classify the question into one of two lanes.\n"
+        "- current: asks what the rule is right now, even if phrased with 'now', 'still', 'latest', or 'as of today'.\n"
+        "- history: asks what changed, what an earlier version said, when or why a rule changed, "
+        "compares versions, or notes that behavior differs from before.\n"
+        "Default to current when unsure.\n"
+        'Reply with exactly one line of JSON and nothing else: {"lane":"current"} or {"lane":"history"}\n\n'
         "Q: how can I claim a hazmat suit?\n"
         '{"lane":"current"}\n'
         "Q: what changed for the foosball rules?\n"
         '{"lane":"history"}\n'
-        "Q: Earlier I was able to use 1 million tokens, now I can't cross 500 thousand tokens, why is that happening?"
+        "Q: Earlier I could use 1 million tokens, now I can't cross 500 thousand, why?\n"
         '{"lane":"history"}\n'
         "Q: what did version 1 say about foosball?\n"
         '{"lane":"history"}\n'
+        "Q: is remote work still allowed on Fridays?\n"
+        '{"lane":"current"}\n'
         "Q: how many gym sessions per week?\n"
         '{"lane":"current"}\n\n'
         f"Q: {query.strip()}\n"
     )
-
-
-def _ground(query: str, decision: RouteDecision) -> RouteDecision:
-    lane = decision.lane
-    if lane == "history" and not _HISTORY_RE.search(query):
-        lane = "current"
-    return RouteDecision(lane=lane, source=decision.source)
 
 
 def _repair_prompt(query: str, payload: dict | None, error: Exception) -> str:

@@ -42,19 +42,34 @@ def _prompt(query: str, hits: list[FusedHit]) -> str:
     blocks = [_excerpt(hit) for hit in hits]
     excerpts = "\n\n".join(blocks)
     return (
-        "You are a policy assistant for Doofenshmirtz Evil Incorporated.\n"
-        "Answer ONLY from the excerpts. If they do not cover the question, "
-        "say so and do not invent rules.\n\n"
-        "Do not name policies, section numbers, section titles, or source files "
-        "in the answer. A sources list is attached separately. Write the rule in "
-        "plain language only.\n\n"
-        "Which text to trust:\n"
-        "- Excerpts marked in force are the current rule.\n"
-        "- Excerpts marked superseded are an older version.\n"
-        "- For a current-rule question, use in-force excerpts.\n"
-        "- For what changed / what an old version said, describe the old rule and "
-        "the new rule in plain language (for example: previously / now). "
-        "Do not name the policy or section.\n\n"
+                "You are a policy assistant for Doofenshmirtz Evil Incorporated. "
+        "Answer the employee's question using ONLY the excerpts below.\n\n"
+        "Grounding:\n"
+        "- If the excerpts fully answer the question, state the rule.\n"
+        "- If they answer only part of it, answer that part and say plainly which "
+        "part is not covered.\n"
+        "- If they do not cover it at all, say the policy excerpts don't address "
+        "this and suggest checking with HR or the policy owner. Never infer, "
+        "generalize, or fill gaps with common-sense rules.\n\n"
+        "Which excerpts to use:\n"
+        "- Each excerpt is marked either in force (the current rule) or "
+        "superseded (an older version).\n"
+        "- For a question about the current rule, use only in-force excerpts. "
+        "If only superseded excerpts exist, say you can only see an older "
+        "version and that it may no longer apply, then describe it.\n"
+        "- For a question about what changed or what an old version said, "
+        "describe the old rule and the current rule side by side in plain "
+        "language (previously ... / now ...). If only one version is present, "
+        "say you can't see the other version.\n"
+        "- If two in-force excerpts conflict, say so rather than picking one.\n\n"
+        "Style:\n"
+        "- Plain language, second person ('you can...'). Lead with the direct "
+        "answer, then any conditions, limits, or exceptions from the excerpts.\n"
+        "- Keep it to a few sentences unless the rule genuinely has several steps.\n"
+        "- Do not mention policy names, section numbers, section titles, source "
+        "files, excerpt labels, or the words 'in force' / 'superseded'. A sources "
+        "list is attached separately. Do not refer to 'the excerpts' in the "
+        "answer itself.\n\n"
         f"Question: {query.strip()}\n\n"
         f"Excerpts:\n{excerpts}\n\n"
         "Answer:\n"
@@ -88,5 +103,12 @@ def _citation(hit: FusedHit) -> dict:
         "status": label,
         "change_status": status or "current",
         "source_file": source_file,
-        "display": f"{title} v{version} - {path} ({label})",
+        "score": round(hit.score, 6),
+        "dense_rank": hit.dense_rank,
+        "sparse_rank": hit.sparse_rank,
+        "display": (
+            f"{title} v{version} - {path} ({label}) "
+            f"[rrf={hit.score:.6f} dense={hit.dense_rank or '-'} "
+            f"sparse={hit.sparse_rank or '-'}]"
+        ),
     }

@@ -1,6 +1,6 @@
 """Answer a policy question: route, hybrid retrieve, generate. No rerank yet.
 
-Default is the full pipeline (1B router + RRF + gemma3:12b).
+Default is the full pipeline (qwen3:4b router + RRF + gemma3:12b).
 
 Run with: python -m utility.show_answer "what changed for the foosball rules?"
 """
@@ -29,7 +29,7 @@ def main() -> None:
     parser.add_argument(
         "--rules-only",
         action="store_true",
-        help="Skip the 1B router and use regex filters only.",
+        help="Skip the 4B router and use regex filters only.",
     )
     parser.add_argument(
         "-k",

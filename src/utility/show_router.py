@@ -34,7 +34,7 @@ def main() -> None:
     parser.add_argument(
         "--llm",
         action="store_true",
-        help="Call gemma3:1b (or OLLAMA_ROUTER_MODEL). Regex is only a fallback.",
+        help="Call qwen3:4b (or OLLAMA_ROUTER_MODEL). Regex is only a fallback.",
     )
     args = parser.parse_args()
     llm = _llm() if args.llm else None

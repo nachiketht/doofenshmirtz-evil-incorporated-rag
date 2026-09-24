@@ -26,7 +26,7 @@ def main() -> None:
     parser.add_argument(
         "--llm",
         action="store_true",
-        help="Use gemma3:1b to route. Regex is only a fallback.",
+        help="Use qwen3:4b to route. Regex is only a fallback.",
     )
     parser.add_argument(
         "-k",

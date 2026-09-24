@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 from ingestion.config import DEFAULT_OLLAMA_BASE_URL, ollama_base_url_from_env
 
-# 1B router; 12B generator.
-DEFAULT_ROUTER_MODEL = "gemma3:1b"
+# 4B router with thinking off; 12B generator.
+DEFAULT_ROUTER_MODEL = "qwen3:4b"
 DEFAULT_GENERATE_MODEL = "gemma3:12b"
 DENSE_CANDIDATES = 20
 SPARSE_CANDIDATES = 20
