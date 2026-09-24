@@ -39,15 +39,15 @@ def _load_leaves(settings: Settings) -> list[TextNode]:
 
 
 def _print_counts(nodes: list[TextNode]) -> None:
-    with_parent = sum(1 for node in nodes if node.metadata.get("parent"))
+    with_parent = sum(1 for node in nodes if node.metadata.get("parent_id"))
     print(f"chunks: {len(nodes)}")
     print(f"leaves: {len(nodes)} embedded in Chroma")
-    print(f"leaves carrying a parent: {with_parent}")
+    print(f"leaves with a parent_id: {with_parent}")
     print()
 
 
 def _sample(nodes: list[TextNode], limit: int = 4) -> list[TextNode]:
-    """One leaf with a parent, one added, one stale, and one current leaf."""
+    """One child leaf, one added, one stale, and one current leaf."""
     chosen: list[TextNode] = []
     seen: set[str] = set()
 
@@ -61,7 +61,7 @@ def _sample(nodes: list[TextNode], limit: int = 4) -> list[TextNode]:
             seen.add(node.node_id)
             return
 
-    take(lambda node: bool(node.metadata.get("parent")))
+    take(lambda node: bool(node.metadata.get("parent_id")))
     take(lambda node: node.metadata.get("change_status") == "added")
     take(lambda node: node.metadata.get("change_status") == "stale")
     take(lambda node: not node.metadata.get("change_status"))

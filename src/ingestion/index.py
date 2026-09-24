@@ -1,4 +1,4 @@
-"""Persist leaf embeddings in Chroma. Parent text is stored on each leaf."""
+"""Persist leaf embeddings in Chroma."""
 
 from __future__ import annotations
 

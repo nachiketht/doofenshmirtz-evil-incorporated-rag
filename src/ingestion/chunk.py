@@ -1,4 +1,4 @@
-"""Build leaf nodes for one policy section, with the parent text on each leaf."""
+"""Build leaf nodes for one policy section."""
 
 from __future__ import annotations
 
@@ -25,9 +25,9 @@ def section_nodes(
 ) -> list[TextNode]:
     """Return leaf nodes for one section.
 
-    A section with no subsections is a single leaf and has an empty parent.
+    A section with no subsections is a single leaf and has an empty parent_id.
     When the section has subsections, or a long body is split, every leaf
-    carries the full section text in ``metadata["parent"]``.
+    points at the section through ``metadata["parent_id"]``.
     """
     metadata_base = {
         "policy_id": policy.policy_id,
@@ -53,12 +53,10 @@ def section_nodes(
                     "node_role": "leaf",
                     "section_path": section_label,
                     "parent_id": "",
-                    "parent": "",
                 },
             )
         ]
 
-    parent_text = _leaf_text(header, _parent_body(section))
     child_specs = _child_specs(policy, section, version, section_slug, header, section_label)
     return [
         _leaf(
@@ -69,7 +67,6 @@ def section_nodes(
                 "node_role": "leaf",
                 "section_path": spec_path,
                 "parent_id": parent_id,
-                "parent": parent_text,
             },
         )
         for spec_id, spec_text, spec_path in child_specs
@@ -108,18 +105,6 @@ def _maybe_split(node_id: str, text: str, path: str) -> list[tuple[str, str, str
     return [(f"{node_id}:p{index}", part, path) for index, part in enumerate(parts)]
 
 
-def _parent_body(section: Section) -> str:
-    lines: list[str] = []
-    if section.intro.strip():
-        lines.append(section.intro.strip())
-    for subsection in section.subsections:
-        line = f"{subsection.number} {subsection.title}"
-        if subsection.body:
-            line = f"{line}. {subsection.body}"
-        lines.append(line)
-    return "\n".join(lines)
-
-
 def _leaf_text(header: str, body: str) -> str:
     body = body.strip()
     if not body:
@@ -136,7 +121,6 @@ def _leaf(*, node_id: str, text: str, metadata: dict[str, str]) -> TextNode:
         id_=node_id,
         text=text,
         metadata=metadata,
-        excluded_embed_metadata_keys=["parent"],
     )
 
 
