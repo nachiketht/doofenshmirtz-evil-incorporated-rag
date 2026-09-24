@@ -16,6 +16,16 @@ COLLECTION_METADATA = {"hnsw:space": "cosine"}
 
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 DEFAULT_EMBED_MODEL = "embeddinggemma"
+_HOST_OLLAMA_BASE_URL = "http://host.docker.internal:11434"
+
+
+def ollama_base_url_from_env() -> str:
+    """Ollama on this machine, or on the host when we are inside Docker."""
+    if value := os.environ.get("OLLAMA_BASE_URL"):
+        return value.rstrip("/")
+    if Path("/.dockerenv").exists():
+        return _HOST_OLLAMA_BASE_URL
+    return DEFAULT_OLLAMA_BASE_URL
 
 # SentenceSplitter measures chunk_size in tokens. 500 words ? 650 tokens.
 LEAF_WORD_LIMIT = 500
@@ -35,6 +45,6 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         return cls(
-            ollama_base_url=os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL),
+            ollama_base_url=ollama_base_url_from_env(),
             embed_model=os.environ.get("OLLAMA_EMBED_MODEL", DEFAULT_EMBED_MODEL),
         )

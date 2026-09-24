@@ -7,8 +7,11 @@ import json
 import re
 from dataclasses import asdict, dataclass
 
+from pydantic import ValidationError
+
 from adapter.chat_adapter import OllamaChatAdapter
 from retrieval.config import RouterSettings
+from retrieval.schema import RouterOutput, router_json_schema
 
 KNOWN_POLICIES = (
     "hr-policy",
@@ -29,7 +32,10 @@ _POLICY_PATTERNS = (
         "health-and-wellness-policy",
     ),
     (
-        re.compile(r"time\s*(?:and|&)\s*usage|\busage policy\b", re.IGNORECASE),
+        re.compile(
+            r"time\s*(?:and|&)\s*usage|\busage policy\b|\bfoosball\b|\btokens?\b",
+            re.IGNORECASE,
+        ),
         "time-and-usage-policy",
     ),
     (
@@ -39,11 +45,15 @@ _POLICY_PATTERNS = (
 )
 
 
+SCHEMA_RETRIES = 2
+
+
 @dataclass(frozen=True)
 class RouteDecision:
     lane: str
     policy_id: str | None
     version: str | None
+    source: str = "regex"
 
 
 def route(
@@ -53,15 +63,14 @@ def route(
     llm: OllamaChatAdapter | None = None,
     rules_only: bool = False,
 ) -> RouteDecision:
-    """Classify a query. Regex wins over the model; unknown ids are dropped."""
+    """Classify a query with the LLM; regex is used only if the model fails."""
     rules = _from_rules(query, policies)
     if rules_only or llm is None:
         return rules
     try:
-        model = _from_llm(query, policies, llm)
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError):
+        return _from_llm(query, policies, llm)
+    except (OSError, ValueError, RuntimeError, json.JSONDecodeError, ValidationError):
         return rules
-    return _merge(rules, model, policies)
 
 
 def _from_rules(query: str, policies: tuple[str, ...]) -> RouteDecision:
@@ -80,49 +89,78 @@ def _from_llm(
     policies: tuple[str, ...],
     llm: OllamaChatAdapter,
 ) -> RouteDecision:
-    payload = llm.complete_json(_prompt(query, policies))
-    lane = str(payload.get("lane") or "current").strip().lower()
-    if lane not in {"current", "history"}:
-        lane = "current"
-    policy_id = _clean_id(payload.get("policy_id"), policies)
-    version = _normalize_version_value(payload.get("version"))
-    return RouteDecision(lane=lane, policy_id=policy_id, version=version)
-
-
-def _merge(
-    rules: RouteDecision,
-    model: RouteDecision,
-    policies: tuple[str, ...],
-) -> RouteDecision:
-    lane = "history" if "history" in {rules.lane, model.lane} else "current"
-    policy_id = rules.policy_id or _clean_id(model.policy_id, policies)
-    version = rules.version or model.version
-    return RouteDecision(lane=lane, policy_id=policy_id, version=version)
+    schema = router_json_schema(policies)
+    prompt = _prompt(query, policies)
+    error: Exception | None = None
+    payload: dict | None = None
+    for attempt in range(1 + SCHEMA_RETRIES):
+        try:
+            payload = llm.complete_json(prompt, schema=schema)
+            parsed = RouterOutput.model_validate(
+                payload, context={"policies": policies}
+            )
+            return RouteDecision(
+                lane=parsed.lane,
+                policy_id=parsed.policy_id,
+                version=parsed.version,
+                source="llm",
+            )
+        except ValidationError as exc:
+            error = exc
+        except json.JSONDecodeError as exc:
+            error = exc
+            payload = None
+        except RuntimeError as exc:
+            if "JSON" not in str(exc) and "object" not in str(exc):
+                raise
+            error = exc
+            payload = None
+        if attempt < SCHEMA_RETRIES:
+            prompt = _repair_prompt(query, policies, payload, error)
+    assert error is not None
+    raise error
 
 
 def _prompt(query: str, policies: tuple[str, ...]) -> str:
-    allowed = "\n".join(f"- {item}" for item in policies)
+    schema = json.dumps(router_json_schema(policies), indent=2)
     return (
         "You route employee questions to a policy search index.\n"
-        "Return JSON only with keys lane, policy_id, version.\n\n"
-        f"Allowed policy_id values:\n{allowed}\n\n"
+        "Return one JSON object that matches this schema exactly.\n\n"
+        f"{schema}\n\n"
         "Rules:\n"
-        '- lane is "history" only if they ask what changed, what an old version '
-        "said, or to compare versions. Otherwise lane is \"current\".\n"
-        "- policy_id must be one of the allowed values, or null if unsure.\n"
-        "- version is like \"1.0\" or \"2.0\" only if they name one, else null.\n"
-        "- Never guess a policy or version.\n\n"
+        '- lane is "history" if they ask what changed, what an old version said, '
+        'or to compare versions. Otherwise "current".\n'
+        "- policy_id must be one of the schema enum values, or null if it is unclear.\n"
+        "- version must match N.N only if they name one, else null. Do not invent 1.0.\n"
+        "- Follow the examples. Do not add extra keys.\n\n"
+        "Examples:\n"
+        "Q: what changed for the foosball rules?\n"
+        '{"lane":"history","policy_id":"time-and-usage-policy","version":null}\n'
+        "Q: can I gift tokens to a friend\n"
+        '{"lane":"current","policy_id":"time-and-usage-policy","version":null}\n'
+        "Q: how many gym sessions per week\n"
+        '{"lane":"current","policy_id":"health-and-wellness-policy","version":null}\n'
+        "Q: what is the dress code?\n"
+        '{"lane":"current","policy_id":"hr-policy","version":null}\n\n'
         f"Question: {query.strip()}\n"
     )
 
 
-def _clean_id(value: object, policies: tuple[str, ...]) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip().lower()
-    if not text or text in {"null", "none"}:
-        return None
-    return text if text in policies else None
+def _repair_prompt(
+    query: str,
+    policies: tuple[str, ...],
+    payload: dict | None,
+    error: Exception,
+) -> str:
+    previous = (
+        json.dumps(payload, indent=2) if payload is not None else "(invalid or empty JSON)"
+    )
+    return (
+        f"{_prompt(query, policies)}\n"
+        "Your previous output failed schema validation. Return a corrected object.\n"
+        f"Previous output:\n{previous}\n"
+        f"Errors:\n{error}\n"
+    )
 
 
 def _normalize_version(match: re.Match[str] | None) -> str | None:

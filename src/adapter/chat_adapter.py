@@ -20,18 +20,21 @@ class OllamaChatAdapter:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
-    def complete_json(self, prompt: str) -> dict:
-        response = httpx.post(
-            f"{self.base_url}/api/generate",
-            json={
-                "model": self.model_name,
-                "prompt": prompt,
-                "stream": False,
-                "format": "json",
-            },
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
+    def complete_json(self, prompt: str, schema: dict | None = None) -> dict:
+        try:
+            response = httpx.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model_name,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": schema if schema is not None else "json",
+                },
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"Ollama request failed: {exc}") from exc
         payload = response.json()
         raw = payload.get("response")
         if isinstance(raw, dict):
