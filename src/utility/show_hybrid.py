@@ -1,6 +1,6 @@
-"""Run the router then dense HNSW search.
+"""Run the router then hybrid dense+BM25 search with RRF.
 
-Run with: python -m utility.show_dense --llm "what changed for the foosball rules?"
+Run with: python -m utility.show_hybrid --llm "what changed for the foosball rules?"
 """
 
 from __future__ import annotations
@@ -12,16 +12,16 @@ import sys
 import httpx
 
 from adapter.chat_adapter import OllamaChatAdapter
-from retrieval.config import DENSE_CANDIDATES, RouterSettings
-from retrieval.dense import DenseHit, dense_search
+from retrieval.config import HYBRID_CANDIDATES, RouterSettings
 from retrieval.filters import chroma_where
+from retrieval.hybrid import FusedHit, hybrid_search
 from retrieval.route import RouteDecision, route
 
 _TEXT_LIMIT = 240
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Show dense retrieval hits.")
+    parser = argparse.ArgumentParser(description="Show RRF-fused hybrid hits.")
     parser.add_argument("query", help="Employee question")
     parser.add_argument(
         "--llm",
@@ -31,13 +31,13 @@ def main() -> None:
     parser.add_argument(
         "-k",
         type=int,
-        default=DENSE_CANDIDATES,
-        help=f"Dense hit count (default {DENSE_CANDIDATES})",
+        default=HYBRID_CANDIDATES,
+        help=f"Fused hit count (default {HYBRID_CANDIDATES})",
     )
     args = parser.parse_args()
     llm = _llm() if args.llm else None
     decision = route(args.query, llm=llm, rules_only=llm is None)
-    hits = dense_search(args.query, decision, k=args.k)
+    hits = hybrid_search(args.query, decision, k=args.k)
     print(json.dumps(_row(args.query, decision, hits), indent=2, ensure_ascii=False))
 
 
@@ -58,7 +58,7 @@ def _llm() -> OllamaChatAdapter | None:
     )
 
 
-def _row(query: str, decision: RouteDecision, hits: list[DenseHit]) -> dict:
+def _row(query: str, decision: RouteDecision, hits: list[FusedHit]) -> dict:
     return {
         "query": query,
         "source": decision.source,
@@ -71,15 +71,16 @@ def _row(query: str, decision: RouteDecision, hits: list[DenseHit]) -> dict:
     }
 
 
-def _hit(hit: DenseHit) -> dict:
+def _hit(hit: FusedHit) -> dict:
     meta = hit.metadata
     text = hit.text
     if len(text) > _TEXT_LIMIT:
         text = f"{text[:_TEXT_LIMIT]}..."
     return {
         "id": hit.id,
-        "distance": round(hit.distance, 4),
-        "score": round(hit.score, 4),
+        "rrf": round(hit.score, 6),
+        "dense_rank": hit.dense_rank,
+        "sparse_rank": hit.sparse_rank,
         "policy_id": meta.get("policy_id"),
         "version": meta.get("version"),
         "change_status": meta.get("change_status"),

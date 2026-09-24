@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import chromadb
-
 from adapter.embedding_adapter import OllamaEmbeddingAdapter
 from ingestion.config import Settings
 from retrieval.config import DENSE_CANDIDATES
 from retrieval.filters import chroma_where
 from retrieval.route import RouteDecision
+from retrieval.store import get_collection
 
 
 @dataclass(frozen=True)
@@ -35,7 +34,7 @@ def dense_search(
     k: int = DENSE_CANDIDATES,
 ) -> list[DenseHit]:
     settings = settings or Settings.from_env()
-    collection = _collection(settings)
+    collection = get_collection(settings)
     embed_model = embed_model or OllamaEmbeddingAdapter(
         model_name=settings.embed_model,
         base_url=settings.ollama_base_url,
@@ -52,21 +51,6 @@ def dense_search(
         kwargs["where"] = where
     result = collection.query(**kwargs)
     return _hits(result)
-
-
-def _collection(settings: Settings):
-    if not settings.chroma_dir.exists():
-        raise FileNotFoundError(
-            f"No Chroma index at {settings.chroma_dir}. Ingest first."
-        )
-    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-    try:
-        return client.get_collection(settings.collection_name)
-    except Exception as exc:
-        raise FileNotFoundError(
-            f"No collection {settings.collection_name!r} in {settings.chroma_dir}. "
-            "Ingest first."
-        ) from exc
 
 
 def _hits(result: dict) -> list[DenseHit]:

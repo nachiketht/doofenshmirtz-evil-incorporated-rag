@@ -24,6 +24,7 @@ _SAMPLES = (
     "what changed in the HR policy",
     "what did version 1 of the time and usage policy say about foosball",
     "compare health and wellness v1 and v2",
+    "where is the zombie safe zone?",
 )
 
 
@@ -74,28 +75,17 @@ def _row(query: str, decision: RouteDecision, regex: RouteDecision) -> dict:
 
 
 def _filters(decision: RouteDecision) -> dict:
-    return {
-        "lane": decision.lane,
-        "policy_id": decision.policy_id,
-        "version": decision.version,
-    }
+    return {"lane": decision.lane}
 
 
 def _means(decision: RouteDecision) -> str:
     origin = "llm" if decision.source == "llm" else "regex fallback"
-    parts = [
-        origin,
-        "search current policy only"
+    lane = (
+        "search current (in-force) chunks across all policies"
         if decision.lane == "current"
-        else "include stale and added chunks (history / diff)",
-    ]
-    if decision.policy_id:
-        parts.append(f"restrict to {decision.policy_id}")
-    else:
-        parts.append("search all policies")
-    if decision.version:
-        parts.append(f"restrict to version {decision.version}")
-    return "; ".join(parts)
+        else "include stale and in-force chunks across all policies (history / diff)"
+    )
+    return f"{origin}; {lane}"
 
 
 if __name__ == "__main__":

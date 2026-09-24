@@ -1,4 +1,4 @@
-"""Route a question to a search lane and optional metadata filters."""
+"""Route a question to current vs history search."""
 
 from __future__ import annotations
 
@@ -13,37 +13,13 @@ from adapter.chat_adapter import OllamaChatAdapter
 from retrieval.config import RouterSettings
 from retrieval.schema import RouterOutput, router_json_schema
 
-KNOWN_POLICIES = (
-    "hr-policy",
-    "health-and-wellness-policy",
-    "time-and-usage-policy",
-)
-
 _HISTORY_RE = re.compile(
     r"\b(what changed|changed|used to|previously|previous|"
-    r"old version|before we|compared|compar(?:e|ison)|diff|"
-    r"revision|new in|no longer|used to say)\b",
+    r"old version|old rule|former (?:rule|policy|version)|before we|"
+    r"compared|compar(?:e|ison)|diff|revision|new in|no longer|"
+    r"used to say|what did (?:v|version)\s*\d)\b",
     re.IGNORECASE,
 )
-_VERSION_RE = re.compile(r"(?:version\s+|v)(\d+(?:\.\d+)?)\b", re.IGNORECASE)
-_POLICY_PATTERNS = (
-    (
-        re.compile(r"\bhealth(?:\s+and\s+wellness)?\b|\bwellness\b|\bgym\b", re.IGNORECASE),
-        "health-and-wellness-policy",
-    ),
-    (
-        re.compile(
-            r"time\s*(?:and|&)\s*usage|\busage policy\b|\bfoosball\b|\btokens?\b",
-            re.IGNORECASE,
-        ),
-        "time-and-usage-policy",
-    ),
-    (
-        re.compile(r"\bhr\b|\bhuman resources\b", re.IGNORECASE),
-        "hr-policy",
-    ),
-)
-
 
 SCHEMA_RETRIES = 2
 
@@ -51,60 +27,40 @@ SCHEMA_RETRIES = 2
 @dataclass(frozen=True)
 class RouteDecision:
     lane: str
-    policy_id: str | None
-    version: str | None
     source: str = "regex"
 
 
 def route(
     query: str,
     *,
-    policies: tuple[str, ...] = KNOWN_POLICIES,
     llm: OllamaChatAdapter | None = None,
     rules_only: bool = False,
 ) -> RouteDecision:
-    """Classify a query with the LLM; regex is used only if the model fails."""
-    rules = _from_rules(query, policies)
+    """Classify current vs history. Regex is used only if the model fails."""
+    rules = _from_rules(query)
     if rules_only or llm is None:
         return rules
     try:
-        return _from_llm(query, policies, llm)
+        return _from_llm(query, llm)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError, ValidationError):
         return rules
 
 
-def _from_rules(query: str, policies: tuple[str, ...]) -> RouteDecision:
+def _from_rules(query: str) -> RouteDecision:
     lane = "history" if _HISTORY_RE.search(query) else "current"
-    version = _normalize_version(_VERSION_RE.search(query))
-    policy_id = None
-    for pattern, slug in _POLICY_PATTERNS:
-        if pattern.search(query) and slug in policies:
-            policy_id = slug
-            break
-    return RouteDecision(lane=lane, policy_id=policy_id, version=version)
+    return RouteDecision(lane=lane)
 
 
-def _from_llm(
-    query: str,
-    policies: tuple[str, ...],
-    llm: OllamaChatAdapter,
-) -> RouteDecision:
-    schema = router_json_schema(policies)
-    prompt = _prompt(query, policies)
+def _from_llm(query: str, llm: OllamaChatAdapter) -> RouteDecision:
+    schema = router_json_schema()
+    prompt = _prompt(query)
     error: Exception | None = None
     payload: dict | None = None
     for attempt in range(1 + SCHEMA_RETRIES):
         try:
             payload = llm.complete_json(prompt, schema=schema)
-            parsed = RouterOutput.model_validate(
-                payload, context={"policies": policies}
-            )
-            return RouteDecision(
-                lane=parsed.lane,
-                policy_id=parsed.policy_id,
-                version=parsed.version,
-                source="llm",
-            )
+            parsed = RouterOutput.model_validate(payload)
+            return _ground(query, RouteDecision(lane=parsed.lane, source="llm"))
         except ValidationError as exc:
             error = exc
         except json.JSONDecodeError as exc:
@@ -116,70 +72,48 @@ def _from_llm(
             error = exc
             payload = None
         if attempt < SCHEMA_RETRIES:
-            prompt = _repair_prompt(query, policies, payload, error)
+            prompt = _repair_prompt(query, payload, error)
     assert error is not None
     raise error
 
 
-def _prompt(query: str, policies: tuple[str, ...]) -> str:
-    schema = json.dumps(router_json_schema(policies), indent=2)
+def _prompt(query: str) -> str:
     return (
-        "You route employee questions to a policy search index.\n"
-        "Return one JSON object that matches this schema exactly.\n\n"
-        f"{schema}\n\n"
-        "Rules:\n"
-        '- lane is "history" if they ask what changed, what an old version said, '
-        'or to compare versions. Otherwise "current".\n'
-        "- policy_id must be one of the schema enum values, or null if it is unclear.\n"
-        "- version must match N.N only if they name one, else null. Do not invent 1.0.\n"
-        "- Follow the examples. Do not add extra keys.\n\n"
-        "Examples:\n"
+        "Is this about the current rule or about an old version / what changed?\n"
+        'Return JSON: {"lane":"current"} or {"lane":"history"}.\n'
+        "Use current unless they ask what changed, what an old version said, or if they are esking anything about the past"
+        "or to compare versions.\n\n"
+        "Q: how can I claim a hazmat suit?\n"
+        '{"lane":"current"}\n'
         "Q: what changed for the foosball rules?\n"
-        '{"lane":"history","policy_id":"time-and-usage-policy","version":null}\n'
-        "Q: can I gift tokens to a friend\n"
-        '{"lane":"current","policy_id":"time-and-usage-policy","version":null}\n'
-        "Q: how many gym sessions per week\n"
-        '{"lane":"current","policy_id":"health-and-wellness-policy","version":null}\n'
-        "Q: what is the dress code?\n"
-        '{"lane":"current","policy_id":"hr-policy","version":null}\n\n'
-        f"Question: {query.strip()}\n"
+        '{"lane":"history"}\n'
+        "Q: Earlier I was able to use 1 million tokens, now I can't cross 500 thousand tokens, why is that happening?"
+        '{"lane":"history"}\n'
+        "Q: what did version 1 say about foosball?\n"
+        '{"lane":"history"}\n'
+        "Q: how many gym sessions per week?\n"
+        '{"lane":"current"}\n\n'
+        f"Q: {query.strip()}\n"
     )
 
 
-def _repair_prompt(
-    query: str,
-    policies: tuple[str, ...],
-    payload: dict | None,
-    error: Exception,
-) -> str:
+def _ground(query: str, decision: RouteDecision) -> RouteDecision:
+    lane = decision.lane
+    if lane == "history" and not _HISTORY_RE.search(query):
+        lane = "current"
+    return RouteDecision(lane=lane, source=decision.source)
+
+
+def _repair_prompt(query: str, payload: dict | None, error: Exception) -> str:
     previous = (
         json.dumps(payload, indent=2) if payload is not None else "(invalid or empty JSON)"
     )
     return (
-        f"{_prompt(query, policies)}\n"
+        f"{_prompt(query)}\n"
         "Your previous output failed schema validation. Return a corrected object.\n"
         f"Previous output:\n{previous}\n"
         f"Errors:\n{error}\n"
     )
-
-
-def _normalize_version(match: re.Match[str] | None) -> str | None:
-    if match is None:
-        return None
-    return _normalize_version_value(match.group(1))
-
-
-def _normalize_version_value(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip().lower().lstrip("v")
-    if not text or text in {"null", "none"}:
-        return None
-    if re.fullmatch(r"\d+", text):
-        return f"{text}.0"
-    if re.fullmatch(r"\d+\.\d+", text):
-        return text
-    return None
 
 
 def main() -> None:

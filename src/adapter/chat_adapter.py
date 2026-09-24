@@ -1,4 +1,4 @@
-"""Ollama JSON completion for routing and other small classify calls."""
+"""Ollama completions for routing (JSON) and generation (text)."""
 
 from __future__ import annotations
 
@@ -19,6 +19,26 @@ class OllamaChatAdapter:
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+
+    def complete(self, prompt: str) -> str:
+        try:
+            response = httpx.post(
+                f"{self.base_url}/api/generate",
+                json={
+                    "model": self.model_name,
+                    "prompt": prompt,
+                    "stream": False,
+                },
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"Ollama request failed: {exc}") from exc
+        payload = response.json()
+        raw = payload.get("response")
+        if not isinstance(raw, str) or not raw.strip():
+            raise RuntimeError("Ollama returned an empty completion.")
+        return raw.strip()
 
     def complete_json(self, prompt: str, schema: dict | None = None) -> dict:
         try:
