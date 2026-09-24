@@ -36,3 +36,29 @@ class DatabaseAdapter:
             ],
         )
         log("database", f"path={self.path} upserts={len(records)}")
+
+    def rows(self) -> list[dict]:
+        stored = self.collection.get(include=["documents", "metadatas", "embeddings"])
+        embeddings = stored.get("embeddings")
+        records = []
+        for index, record_id in enumerate(stored["ids"]):
+            meta = stored["metadatas"][index] or {}
+            vector = None if embeddings is None else embeddings[index]
+            records.append(
+                {
+                    "id": record_id,
+                    "text": stored["documents"][index],
+                    "policy": meta.get("policy", ""),
+                    "version": meta.get("version", ""),
+                    "section": meta.get("section", ""),
+                    "heading_path": meta.get("heading_path", ""),
+                    "parent_id": meta.get("parent_id", ""),
+                    "source": meta.get("source", ""),
+                    "word_count": meta.get("word_count", 0),
+                    "vector": []
+                    if vector is None
+                    else [float(value) for value in vector],
+                }
+            )
+        log("database", f"path={self.path} rows={len(records)}")
+        return records
