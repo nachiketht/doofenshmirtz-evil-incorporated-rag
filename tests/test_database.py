@@ -30,3 +30,17 @@ def test_upsert_is_idempotent_and_keeps_metadata(tmp_path):
     assert meta["version"] == "1.0"
     assert meta["section"] == "1. Purpose"
     assert stored["documents"][0] == "Purpose body"
+
+
+def test_rows_returns_text_metadata_and_vector(tmp_path):
+    database = DatabaseAdapter(tmp_path / "chroma")
+    database.upsert([_record()], [[0.25, 0.75]])
+    stored = database.rows()
+    assert stored[0]["text"] == "Purpose body"
+    assert stored[0]["policy"] == "HR Policy"
+    assert stored[0]["word_count"] == 2
+    assert stored[0]["vector"] == [0.25, 0.75]
+
+
+def test_rows_on_an_empty_collection(tmp_path):
+    assert DatabaseAdapter(tmp_path / "chroma").rows() == []
