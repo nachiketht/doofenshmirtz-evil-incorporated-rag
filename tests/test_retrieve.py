@@ -2,7 +2,7 @@ import logging
 import sys
 
 from adpater.database_adapter import DatabaseAdapter
-from rag.retrieve import EMPTY, apply_rerank, bm25_scores, cosine, fuse, main, retrieve
+from rag.retrieve import apply_rerank, bm25_scores, cosine, fuse, main, retrieve
 
 logging.basicConfig(level=logging.INFO)
 
@@ -66,14 +66,14 @@ class FakeReranker:
 def ask(tmp_path, rows, vectors, replies, reverse=False, partial=False):
     model = FakeModel(replies)
     reranker = FakeReranker(reverse=reverse, partial=partial)
-    text = retrieve(
+    found = retrieve(
         "cake",
         FakeEmbedder([1.0, 0.0]),
         model,
         store(tmp_path / "chroma", rows, vectors),
         reranker,
     )
-    return text, model.prompts, reranker.documents
+    return found, model.prompts, reranker.documents
 
 
 def test_bm25_scores_keyword_overlap():
@@ -118,12 +118,12 @@ def test_lookup_drops_older_versions(tmp_path):
         tmp_path,
         rows,
         [[1.0, 0.0], [0.0, 1.0]],
-        ['{"kind":"lookup","policy":"","version":""}', "answer"],
+        ['{"kind":"lookup","policy":"","version":""}'],
     )
-    assert text == "answer"
+    assert text["kind"] == "lookup"
+    assert text["hits"][0]["text"] == "vacation days"
     assert "birthday cake" not in documents[0][0]
-    assert "vacation days" in documents[0][0]
-    assert prompts[0] != prompts[1]
+    assert len(prompts) == 1
     assert FakeEmbedder([1.0, 0.0]).embed(["cake"], "query") == [[1.0, 0.0]]
 
 
@@ -132,14 +132,14 @@ def test_lookup_keeps_a_named_version(tmp_path):
         record("HR Policy", "2.0", "3. Leave", "vacation days"),
         record("HR Policy", "1.0", "3. Leave", "birthday cake"),
     ]
-    _text, prompts, documents = ask(
+    found, _prompts, documents = ask(
         tmp_path,
         rows,
         [[1.0, 0.0], [0.0, 1.0]],
-        ['{"kind":"lookup","policy":"HR Policy","version":"1.0"}', "answer"],
+        ['{"kind":"lookup","policy":"HR Policy","version":"1.0"}'],
     )
-    assert "birthday cake" in documents[0][0]
-    assert "HR Policy 1.0 3. Leave" in prompts[1]
+    assert documents[0] == ["birthday cake"]
+    assert found["hits"][0]["version"] == "1.0"
 
 
 def test_lookup_can_name_a_policy_without_a_version(tmp_path):
@@ -152,7 +152,7 @@ def test_lookup_can_name_a_policy_without_a_version(tmp_path):
         tmp_path,
         rows,
         [[1.0, 0.0], [0.0, 1.0], [0.2, 0.2]],
-        ['{"kind":"lookup","policy":"HR Policy","version":""}', "answer"],
+        ['{"kind":"lookup","policy":"HR Policy","version":""}'],
     )
     assert documents[0] == ["vacation days"]
 
@@ -162,14 +162,14 @@ def test_aliases_collapse_to_one_heading(tmp_path):
         record("Time & Usage Policy", "2.0", "1. Purpose", "screen time"),
         record("Time and Usage Policy", "2.0", "1. Purpose", "screen time copy"),
     ]
-    _text, prompts, documents = ask(
+    found, _prompts, documents = ask(
         tmp_path,
         rows,
         [[1.0, 0.0], [0.0, 1.0]],
-        ['{"kind":"lookup","policy":"","version":""}', "answer"],
+        ['{"kind":"lookup","policy":"","version":""}'],
     )
     assert documents[0] == ["screen time"]
-    assert "Time & Usage Policy 2.0 1. Purpose" in prompts[1]
+    assert found["hits"][0]["policy"] == "Time & Usage Policy"
 
 
 def test_compare_pairs_current_and_previous(tmp_path):
@@ -179,46 +179,47 @@ def test_compare_pairs_current_and_previous(tmp_path):
         record("HR Policy", "2.0", "8. Added", "new clause"),
         record("HR Policy", "1.0", "9. Only Old", "removed clause"),
     ]
-    _text, prompts, _documents = ask(
+    found, _prompts, _documents = ask(
         tmp_path,
         rows,
         [[1.0, 0.0], [0.0, 1.0], [0.2, 0.8], [0.8, 0.2]],
-        ['{"kind":"compare","policy":"HR Policy","version":""}', "answer"],
+        ['{"kind":"compare","policy":"HR Policy","version":""}'],
     )
-    assert "current 2.0" in prompts[1]
-    assert "no dessert" in prompts[1]
-    assert "previous 1.0" in prompts[1]
-    assert "cake on friday" in prompts[1]
-    assert "removed clause" in prompts[1]
-    assert "new clause" in prompts[1]
+    by_heading = {hit["heading_path"]: hit for hit in found["hits"]}
+    leave = by_heading["3. Leave"]
+    assert leave["current"]["text"] == "no dessert"
+    assert leave["previous"]["text"] == "cake on friday"
+    assert by_heading["8. Added"]["current"]["text"] == "new clause"
+    assert by_heading["8. Added"]["previous"] is None
+    assert by_heading["9. Only Old"]["previous"]["text"] == "removed clause"
+    assert by_heading["9. Only Old"]["current"] is None
 
 
 def test_compare_with_one_version_has_no_previous_side(tmp_path):
     rows = [record("Health & Wellness Policy", "1.0", "1. Purpose", "rest")]
-    _text, prompts, _documents = ask(
+    found, _prompts, _documents = ask(
         tmp_path,
         rows,
         [[1.0, 0.0]],
-        [
-            '{"kind":"compare","policy":"Health & Wellness Policy","version":""}',
-            "answer",
-        ],
+        ['{"kind":"compare","policy":"Health & Wellness Policy","version":""}'],
     )
-    assert "current 1.0" in prompts[1]
-    assert "previous" in prompts[1]
+    assert found["kind"] == "compare"
+    assert found["hits"][0]["current"]["text"] == "rest"
+    assert found["hits"][0]["previous"] is None
 
 
 def test_unknown_compare_policy_falls_back_to_lookup(tmp_path, caplog):
     caplog.set_level(logging.INFO, logger="ingest")
     rows = [record("HR Policy", "2.0", "3. Leave", "birthday cake")]
-    _text, prompts, _documents = ask(
+    found, _prompts, documents = ask(
         tmp_path,
         rows,
         [[1.0, 0.0]],
-        ['{"kind":"compare","policy":"","version":""}', "answer"],
+        ['{"kind":"compare","policy":"","version":""}'],
     )
     assert "kind=lookup reason=unknown policy" in caplog.text
-    assert "birthday cake" in prompts[1]
+    assert found["kind"] == "lookup"
+    assert documents[0] == ["birthday cake"]
 
 
 def test_empty_collection_skips_the_answer_call(tmp_path, caplog):
@@ -232,7 +233,8 @@ def test_empty_collection_skips_the_answer_call(tmp_path, caplog):
         DatabaseAdapter(tmp_path / "chroma"),
         reranker,
     )
-    assert text == EMPTY
+    assert text["kind"] == "lookup"
+    assert text["hits"] == []
     assert len(model.prompts) == 1
     assert reranker.documents == []
     assert "hits=0" in caplog.text
@@ -243,14 +245,14 @@ def test_reranker_order_reaches_the_answer(tmp_path):
         record("HR Policy", "2.0", "1. Purpose", "vacation days"),
         record("HR Policy", "2.0", "3. Leave", "birthday cake"),
     ]
-    _text, prompts, _documents = ask(
+    found, _prompts, _documents = ask(
         tmp_path,
         rows,
         [[1.0, 0.0], [0.0, 1.0]],
-        ['{"kind":"lookup","policy":"HR Policy","version":"2.0"}', "answer"],
+        ['{"kind":"lookup","policy":"HR Policy","version":"2.0"}'],
         reverse=True,
     )
-    assert prompts[1].index("birthday cake") < prompts[1].index("vacation days")
+    assert [hit["text"] for hit in found["hits"]] == ["birthday cake", "vacation days"]
 
 
 def test_partial_rerank_keeps_the_remaining_chunks(tmp_path):
@@ -258,15 +260,14 @@ def test_partial_rerank_keeps_the_remaining_chunks(tmp_path):
         record("HR Policy", "2.0", "1. Purpose", "vacation days"),
         record("HR Policy", "2.0", "3. Leave", "birthday cake"),
     ]
-    _text, prompts, _documents = ask(
+    found, _prompts, _documents = ask(
         tmp_path,
         rows,
         [[1.0, 0.0], [0.0, 1.0]],
-        ['{"kind":"lookup","policy":"HR Policy","version":"2.0"}', "answer"],
+        ['{"kind":"lookup","policy":"HR Policy","version":"2.0"}'],
         partial=True,
     )
-    assert "vacation days" in prompts[1]
-    assert "birthday cake" in prompts[1]
+    assert {hit["text"] for hit in found["hits"]} == {"vacation days", "birthday cake"}
 
 
 def test_duplicate_rerank_text_stays_paired():
@@ -293,7 +294,7 @@ def test_main_prints_the_answer(monkeypatch, capsys):
         seen["database"] = database
         seen["model"] = model
         seen["reranker"] = reranker
-        return "cake"
+        return {"kind": "lookup", "hits": [{"text": "cake"}]}
 
     monkeypatch.setattr(sys, "argv", ["retrieve.py", "who gets cake?"])
     monkeypatch.setattr("rag.retrieve.EmbeddingAdapter", lambda: "embedder")
@@ -301,6 +302,10 @@ def test_main_prints_the_answer(monkeypatch, capsys):
     monkeypatch.setattr("rag.retrieve.DatabaseAdapter", lambda path: path)
     monkeypatch.setattr("rag.retrieve.RerankerAdapter", lambda: "reranker")
     monkeypatch.setattr("rag.retrieve.retrieve", fake_retrieve)
+    monkeypatch.setattr(
+        "rag.retrieve.generate",
+        lambda question, kind, hits, model: "cake" if model == seen["model"] else "",
+    )
     assert main() == 0
     assert capsys.readouterr().out.strip() == "cake"
     assert seen["question"] == "who gets cake?"
@@ -314,12 +319,13 @@ def test_main_uses_the_given_database(monkeypatch):
 
     def fake_retrieve(question, embedder, model, database, reranker, n=3):
         seen["database"] = database
-        return "ok"
+        return {"kind": "lookup", "hits": []}
 
     monkeypatch.setattr("rag.retrieve.EmbeddingAdapter", lambda: None)
     monkeypatch.setattr("rag.retrieve.GenerationAdapter", lambda: None)
     monkeypatch.setattr("rag.retrieve.DatabaseAdapter", lambda path: path)
     monkeypatch.setattr("rag.retrieve.RerankerAdapter", lambda: None)
     monkeypatch.setattr("rag.retrieve.retrieve", fake_retrieve)
+    monkeypatch.setattr("rag.retrieve.generate", lambda *args: "ok")
     assert main(["question", "other"]) == 0
     assert seen["database"] == "other"
