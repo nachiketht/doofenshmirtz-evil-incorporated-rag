@@ -1,5 +1,6 @@
 import json
 
+from rag.config import ROUTE_MODEL
 from rag.logutil import log
 
 PROMPT = """Reply with one JSON object only: {{"kind":"lookup"|"compare","policy":"","version":""}}
@@ -20,6 +21,10 @@ what did HR Policy 1.0 say about leave -> {{"kind":"lookup","policy":"HR Policy"
 Question:
 {question}
 """
+
+
+def routing_model() -> str:
+    return ROUTE_MODEL
 
 
 def route(question: str, model, policies: dict) -> dict:

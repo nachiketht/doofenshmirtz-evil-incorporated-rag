@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from rag.router import parse_route, route
+from rag.router import parse_route, route, routing_model
 
 POLICIES = {"HR Policy": ("1.0", "2.0"), "Health & Wellness Policy": ("1.0",)}
 
@@ -15,6 +15,10 @@ class FakeModel:
     def generate(self, prompt):
         self.prompts.append(prompt)
         return self.reply
+
+
+def test_routing_model_is_pinned_gemma3_4b():
+    assert routing_model() == "gemma3:4b"
 
 
 def test_route_keeps_a_compare_paraphrase():

@@ -7,6 +7,7 @@ from adpater.database_adapter import DatabaseAdapter
 from adpater.embedding_adapter import EmbeddingAdapter
 from adpater.generation_adapter import GenerationAdapter
 from adpater.rerank_adapter import RerankerAdapter
+from rag.config import ROUTE_MODEL
 from rag.generate import generate
 from rag.logutil import configure_logging, log, logger
 from rag.router import route
@@ -285,15 +286,16 @@ def main(argv=None) -> int:
     for handler in logger.handlers:
         if handler.name == "console":
             handler.setLevel(logging.WARNING)
-    model = GenerationAdapter()
+    router = GenerationAdapter(model=ROUTE_MODEL)
+    answerer = GenerationAdapter()
     found = retrieve(
         question,
         embedder=EmbeddingAdapter(),
-        model=model,
+        model=router,
         database=DatabaseAdapter(db_path),
         reranker=RerankerAdapter(),
     )
-    text = generate(question, found["kind"], found["hits"], model)
+    text = generate(question, found["kind"], found["hits"], answerer)
     print(text)
     return 0
 

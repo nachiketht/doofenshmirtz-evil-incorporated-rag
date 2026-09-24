@@ -7,6 +7,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 ollama pull embeddinggemma:latest
+ollama pull gemma3:4b
 ollama pull gemma3:12b
 ```
 

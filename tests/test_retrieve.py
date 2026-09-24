@@ -296,21 +296,24 @@ def test_main_prints_the_answer(monkeypatch, capsys):
         seen["reranker"] = reranker
         return {"kind": "lookup", "hits": [{"text": "cake"}]}
 
+    def fake_adapter(model=None):
+        return model or "generator"
+
     monkeypatch.setattr(sys, "argv", ["retrieve.py", "who gets cake?"])
     monkeypatch.setattr("rag.retrieve.EmbeddingAdapter", lambda: "embedder")
-    monkeypatch.setattr("rag.retrieve.GenerationAdapter", lambda: "generator")
+    monkeypatch.setattr("rag.retrieve.GenerationAdapter", fake_adapter)
     monkeypatch.setattr("rag.retrieve.DatabaseAdapter", lambda path: path)
     monkeypatch.setattr("rag.retrieve.RerankerAdapter", lambda: "reranker")
     monkeypatch.setattr("rag.retrieve.retrieve", fake_retrieve)
     monkeypatch.setattr(
         "rag.retrieve.generate",
-        lambda question, kind, hits, model: "cake" if model == seen["model"] else "",
+        lambda question, kind, hits, model: "cake" if model == "generator" else "",
     )
     assert main() == 0
     assert capsys.readouterr().out.strip() == "cake"
     assert seen["question"] == "who gets cake?"
     assert seen["database"] == "chroma"
-    assert seen["model"] == "generator"
+    assert seen["model"] == "gemma3:4b"
     assert seen["reranker"] == "reranker"
 
 
@@ -322,7 +325,7 @@ def test_main_uses_the_given_database(monkeypatch):
         return {"kind": "lookup", "hits": []}
 
     monkeypatch.setattr("rag.retrieve.EmbeddingAdapter", lambda: None)
-    monkeypatch.setattr("rag.retrieve.GenerationAdapter", lambda: None)
+    monkeypatch.setattr("rag.retrieve.GenerationAdapter", lambda model=None: None)
     monkeypatch.setattr("rag.retrieve.DatabaseAdapter", lambda path: path)
     monkeypatch.setattr("rag.retrieve.RerankerAdapter", lambda: None)
     monkeypatch.setattr("rag.retrieve.retrieve", fake_retrieve)
