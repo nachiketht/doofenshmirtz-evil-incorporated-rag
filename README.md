@@ -88,6 +88,7 @@ Inspect stages without the generator:
 python -m utility.show_router "what changed for the foosball rules?"
 python -m utility.show_hybrid --rerank "What is the winner-takes-tokens foosball rule?"
 python -m utility.show_compare "How many tokens do I get each cycle?"
+python -m utility.show_compare "What does the health policy say about alphabetizing the supply closet unprompted?"
 python -m utility.show_answer "Are interns required to meet the gym minimum?"
 ```
 
@@ -103,7 +104,7 @@ python -m pytest tests/test_eval.py -v --tb=short
 
 Writes `[results/eval_report.md](results/eval_report.md)` and `[results/eval_results.json](results/eval_results.json)`.
 
-v1/v2 conflicts (nuclear wait, token allocation) are diagnosed in `[results/data_quality.md](results/data_quality.md)`.
+v1/v2 conflicts (nuclear wait, token allocation) are diagnosed in `[results/data_quality.md](results/data_quality.md)`. Hybrid vs dense on one lexical query is in `[results/hybrid_vs_dense.md](results/hybrid_vs_dense.md)`.
 
 Offline unit tests (no Chroma / Ollama / Cohere):
 
@@ -134,7 +135,7 @@ mypy
 | `src/adapter/`        | Ollama embed/chat, Cohere, Chroma       |
 | `src/utility/`        | Debug CLIs                              |
 | `evaluation_harness/` | Gold set and scoring                    |
-| `results/`            | Eval JSON, report, data-quality write-up |
+| `results/`            | Eval JSON, report, data-quality and hybrid write-ups |
 | `tests/`              | Unit tests and live eval pytest         |
 
 
@@ -144,7 +145,7 @@ mypy
 
 - **Dense:** Chroma HNSW, cosine, EmbeddingGemma query vector.
 - **Sparse:** Okapi BM25 (`rank_bm25`, k1=1.5, b=0.75) over the same metadata-filtered leaves.
-- **Hybrid:** union by chunk id. Dense hits first, then BM25-only leftovers. No weighted score and no RRF; Cohere ranks the pool.
+- **Hybrid:** union by chunk id. Dense hits first, then BM25-only leftovers. No weighted score and no RRF; Cohere ranks the pool. One query where that beats dense-only: `[results/hybrid_vs_dense.md](results/hybrid_vs_dense.md)`.
 - **Router:** `qwen3:4b` with thinking off. History regex is only the fallback. Current lane filters `change_status != stale`.
 
 
