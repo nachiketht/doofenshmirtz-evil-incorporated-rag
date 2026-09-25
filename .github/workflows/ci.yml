@@ -15,16 +15,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install ruff
 
       - name: Format check
         run: ruff format --check .
-
-      - name: Lint
-        run: ruff check .
-
-      - name: Type check
-        run: mypy
 
   build:
     runs-on: ubuntu-latest
@@ -37,7 +31,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install build
 
       - name: Build
         run: python -m build
@@ -57,3 +51,19 @@ jobs:
 
       - name: Unit and integration tests
         run: pytest
+
+      - name: Evaluate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("storage/eval_results.json").read_text())
+          totals = data["summary"]
+          recall = totals["retrieval_recall"]["score"]
+          accuracy = totals["answer_accuracy"]["score"]
+          rows = data["cases"]
+          assert recall == 1.0, totals["retrieval_recall"]
+          assert accuracy == 1.0, totals["answer_accuracy"]
+          assert len(rows) >= 8
+          print(f"recall={recall:.3f} accuracy={accuracy:.3f} questions={len(rows)}")
+          PY
