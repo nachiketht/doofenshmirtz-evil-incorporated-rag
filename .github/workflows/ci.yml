@@ -53,4 +53,14 @@ jobs:
         run: pytest
 
       - name: Evaluate
-        run: python -m rag.eval --output results/result.json
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("results/result.json").read_text())
+          totals = data["totals"]
+          assert totals["recall"] == 1.0, totals
+          assert totals["accuracy"] == 1.0, totals
+          assert len(data["rows"]) >= 8
+          print(f"recall={totals['recall']:.3f} accuracy={totals['accuracy']:.3f} questions={len(data['rows'])}")
+          PY
