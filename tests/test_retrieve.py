@@ -2,6 +2,7 @@ import logging
 import sys
 
 from adpater.database_adapter import DatabaseAdapter
+from rag.logutil import disable_question_log, enable_question_log, stage
 from rag.retrieve import apply_rerank, bm25_scores, cosine, fuse, main, retrieve
 
 logging.basicConfig(level=logging.INFO)
@@ -311,6 +312,11 @@ def test_main_prints_the_answer(monkeypatch, capsys):
     )
     assert main() == 0
     assert capsys.readouterr().out.strip() == "cake"
+    assert main(trace=True) == 0
+    traced = capsys.readouterr().out.splitlines()
+    assert traced[:-1] == ["cake"]
+    assert traced[-1].startswith("latency: ")
+    assert traced[-1].endswith("s")
     assert seen["question"] == "who gets cake?"
     assert seen["database"] == "chroma"
     assert seen["model"] == "gemma3:4b"
@@ -332,3 +338,32 @@ def test_main_uses_the_given_database(monkeypatch):
     monkeypatch.setattr("rag.retrieve.generate", lambda *args: "ok")
     assert main(["question", "other"]) == 0
     assert seen["database"] == "other"
+
+
+def test_trace_enables_stage_logs(monkeypatch):
+    seen = {}
+
+    def fake_main(argv=None, trace=False):
+        seen["trace"] = trace
+        seen["argv"] = argv
+        return 0
+
+    monkeypatch.setattr("rag.trace.ask", fake_main)
+    from rag.trace import main as trace_main
+
+    assert trace_main(["who gets cake?"]) == 0
+    assert seen == {"trace": True, "argv": ["who gets cake?"]}
+
+
+def test_stage_logs_latency_only_for_a_question(caplog):
+    caplog.set_level(logging.INFO, logger="ingest")
+    with stage("hybrid"):
+        pass
+    assert "hybrid latency=" not in caplog.text
+    enable_question_log()
+    try:
+        with stage("hybrid"):
+            pass
+    finally:
+        disable_question_log()
+    assert "hybrid latency=" in caplog.text

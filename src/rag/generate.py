@@ -1,5 +1,5 @@
 from rag.config import GENERATE_MODEL
-from rag.logutil import log
+from rag.logutil import log, stage
 
 EMPTY = "No matching policy text."
 SYSTEM = """You answer questions about Doofenshmirtz Evil Inc policies.
@@ -52,6 +52,7 @@ def generate(question: str, kind: str, hits: list, model) -> str:
         return EMPTY
     blocks = pair_block if kind == "compare" else chunk_block
     body = "\n\n".join(blocks(hit) for hit in hits)
-    text = model.generate(f"Question: {question}\n\n{body}", system=SYSTEM)
+    with stage("generate"):
+        text = model.generate(f"Question: {question}\n\n{body}", system=SYSTEM)
     log("generate", f"kind={kind} hits={len(hits)}")
     return f"{text.strip()}\n\n{citations(kind, hits)}"
