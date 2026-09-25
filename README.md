@@ -103,6 +103,8 @@ python -m pytest tests/test_eval.py -v --tb=short
 
 Writes `[results/eval_report.md](results/eval_report.md)` and `[results/eval_results.json](results/eval_results.json)`.
 
+v1/v2 conflicts (nuclear wait, token allocation) are diagnosed in `[results/data_quality.md](results/data_quality.md)`.
+
 Offline unit tests (no Chroma / Ollama / Cohere):
 
 ```bash
@@ -132,7 +134,7 @@ mypy
 | `src/adapter/`        | Ollama embed/chat, Cohere, Chroma       |
 | `src/utility/`        | Debug CLIs                              |
 | `evaluation_harness/` | Gold set and scoring                    |
-| `results/`            | Eval JSON and markdown report           |
+| `results/`            | Eval JSON, report, data-quality write-up |
 | `tests/`              | Unit tests and live eval pytest         |
 
 
