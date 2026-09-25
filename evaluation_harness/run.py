@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -94,8 +95,13 @@ def run_eval(gold_cases: list[dict]) -> dict[str, dict]:
     print("\nRunning eval harness on the gold set...", file=sys.stderr)
     for case in gold_cases:
         print(f"  {case['id']}: retrieve", file=sys.stderr, flush=True)
+        t0 = time.perf_counter()
         decision = route(case["query"], llm=router_llm)
+        route_s = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
         union = hybrid_search(case["query"], decision)
+        retrieve_s = time.perf_counter() - t0
         union_ids = _chunk_ids(union)
         gold_ids = list(case["gold_chunk_ids"])
         require_all = bool(case.get("require_all_gold"))
@@ -107,9 +113,12 @@ def run_eval(gold_cases: list[dict]) -> dict[str, dict]:
         rerank_ok = False
         rerank_found: list[str] = []
         rerank_require_all = bool(case.get("rerank_require_all", False))
+        rerank_s = None
         if can_rerank:
             try:
+                t0 = time.perf_counter()
                 reranked = rerank_hits(case["query"], union)
+                rerank_s = time.perf_counter() - t0
                 rerank_ids = _chunk_ids(reranked)
                 rerank_ok, rerank_found = recall_ok(
                     gold_ids, rerank_ids, require_all=rerank_require_all
@@ -122,13 +131,32 @@ def run_eval(gold_cases: list[dict]) -> dict[str, dict]:
         print(f"  {case['id']}: generate", file=sys.stderr, flush=True)
         answer_error = None
         answer = ""
+        generate_s = None
         try:
+            t0 = time.perf_counter()
             answer = generate_answer(case["query"], reranked or union, llm=generator)
+            generate_s = time.perf_counter() - t0
         except RuntimeError as exc:
             answer_error = str(exc)
         answer_ok, missing_groups = answer_covers(answer, case["answer_any"])
         if answer_error:
             answer_ok = False
+
+        total_s = route_s + retrieve_s + (rerank_s or 0.0) + (generate_s or 0.0)
+        latency_s = {
+            "route": _round_s(route_s),
+            "retrieve": _round_s(retrieve_s),
+            "rerank": None if rerank_s is None else _round_s(rerank_s),
+            "generate": None if generate_s is None else _round_s(generate_s),
+            "total": _round_s(total_s),
+        }
+        print(
+            f"  {case['id']}: {latency_s['total']}s "
+            f"(route {latency_s['route']} retrieve {latency_s['retrieve']} "
+            f"rerank {latency_s['rerank']} generate {latency_s['generate']})",
+            file=sys.stderr,
+            flush=True,
+        )
 
         rows[case["id"]] = {
             "id": case["id"],
@@ -152,6 +180,7 @@ def run_eval(gold_cases: list[dict]) -> dict[str, dict]:
             "answer_ok": answer_ok,
             "answer_missing_groups": missing_groups,
             "answer_error": answer_error,
+            "latency_s": latency_s,
         }
 
 
@@ -165,12 +194,35 @@ def run_eval(gold_cases: list[dict]) -> dict[str, dict]:
     print(
         f"Eval scores: retrieval recall (rerank@5) "
         f"{summary['retrieval_recall']['display']}  "
-        f"answer accuracy {summary['answer_accuracy']['display']}",
+        f"answer accuracy {summary['answer_accuracy']['display']}  "
+        f"latency {summary['latency']['total']['display']}",
         file=sys.stderr,
     )
     print(f"Wrote {RESULTS_PATH}", file=sys.stderr)
     print(f"Wrote {REPORT_PATH}", file=sys.stderr)
     return rows
+
+
+def _round_s(seconds: float) -> float:
+    return round(seconds, 3)
+
+
+def _latency_stats(rows: dict[str, dict], key: str) -> dict:
+    values = [
+        row["latency_s"][key]
+        for row in rows.values()
+        if row.get("latency_s", {}).get(key) is not None
+    ]
+    if not values:
+        return {"mean": None, "total": None, "n": 0, "display": "-"}
+    total = sum(values)
+    mean = total / len(values)
+    return {
+        "mean": round(mean, 3),
+        "total": round(total, 3),
+        "n": len(values),
+        "display": f"mean {mean:.2f}s  total {total:.2f}s",
+    }
 
 
 def _rate(hits: int, total: int) -> dict:
@@ -202,11 +254,32 @@ def _summary(rows: dict[str, dict]) -> dict:
             sum(1 for row in rows.values() if row["lane"] == row["expected_lane"]),
             n,
         ),
+        "latency": {
+            "route": _latency_stats(rows, "route"),
+            "retrieve": _latency_stats(rows, "retrieve"),
+            "rerank": _latency_stats(rows, "rerank"),
+            "generate": _latency_stats(rows, "generate"),
+            "total": _latency_stats(rows, "total"),
+        },
     }
 
 
 def _mark(ok: bool) -> str:
     return "pass" if ok else "fail"
+
+
+def _mean(stats: dict) -> str:
+    value = stats.get("mean")
+    return "-" if value is None else f"{value:.2f}s"
+
+
+def _total(stats: dict) -> str:
+    value = stats.get("total")
+    return "-" if value is None else f"{value:.2f}s"
+
+
+def _fmt_s(value: float | None) -> str:
+    return "-" if value is None else f"{value:.2f}"
 
 
 def _markdown_report(summary: dict, rows: dict[str, dict]) -> str:
@@ -224,11 +297,27 @@ def _markdown_report(summary: dict, rows: dict[str, dict]) -> str:
         f"| Retrieval recall (rerank@5) | Gold chunk in the Cohere top 5 sent to generation | {summary['retrieval_recall']['display']} |",
         f"| Answer accuracy | Generated answer contains every expected key group | {summary['answer_accuracy']['display']} |",
         f"| Router accuracy | Lane is current vs history as labeled | {summary['router_accuracy']['display']} |",
+        f"| Average latency | Mean end-to-end time per question | {_mean(summary['latency']['total'])} |",
+        "",
+        "## Latency",
+        "",
+        f"**Final average latency: {_mean(summary['latency']['total'])} per question** "
+        f"(total {_total(summary['latency']['total'])} over {summary['n']} questions).",
+        "",
+        "Wall time in seconds. Retrieve is dense+BM25 union. Total is the sum of stages.",
+        "",
+        "| Stage | Mean | Total |",
+        "| --- | ---: | ---: |",
+        f"| route | {_mean(summary['latency']['route'])} | {_total(summary['latency']['route'])} |",
+        f"| retrieve | {_mean(summary['latency']['retrieve'])} | {_total(summary['latency']['retrieve'])} |",
+        f"| rerank | {_mean(summary['latency']['rerank'])} | {_total(summary['latency']['rerank'])} |",
+        f"| generate | {_mean(summary['latency']['generate'])} | {_total(summary['latency']['generate'])} |",
+        f"| end-to-end | {_mean(summary['latency']['total'])} | {_total(summary['latency']['total'])} |",
         "",
         "## Per-question results",
         "",
-        "| id | lane | union | rerank@5 | answer |",
-        "| --- | --- | --- | --- | --- |",
+        "| id | lane | union | rerank@5 | answer | total s | generate s |",
+        "| --- | --- | --- | --- | --- | ---: | ---: |",
     ]
     for row in rows.values():
         rerank = "skip" if row.get("rerank_error") else _mark(row["rerank_recall"])
@@ -237,9 +326,11 @@ def _markdown_report(summary: dict, rows: dict[str, dict]) -> str:
             if row["lane"] == row["expected_lane"]
             else f"{row['lane']} != {row['expected_lane']}"
         )
+        latency = row.get("latency_s") or {}
         lines.append(
             f"| {row['id']} | {lane} | {_mark(row['union_recall'])} | "
-            f"{rerank} | {_mark(row['answer_ok'])} |"
+            f"{rerank} | {_mark(row['answer_ok'])} | "
+            f"{_fmt_s(latency.get('total'))} | {_fmt_s(latency.get('generate'))} |"
         )
     lines.append("")
     return "\n".join(lines)

@@ -1,6 +1,7 @@
 """Offline checks for gold-set matching helpers."""
 
 from evaluation_harness import answer_covers, normalize, phrase_in, recall_ok
+from evaluation_harness.run import _latency_stats
 
 
 def test_normalize_strips_thousands_commas() -> None:
@@ -35,3 +36,17 @@ def test_recall_any_versus_all() -> None:
     assert any_ok
     assert found == ["b"]
     assert not all_ok
+
+
+def test_latency_stats_skips_missing_and_averages() -> None:
+    rows = {
+        "a": {"latency_s": {"generate": 1.0, "rerank": None, "total": 2.0}},
+        "b": {"latency_s": {"generate": 3.0, "rerank": 0.4, "total": 4.0}},
+    }
+    generate = _latency_stats(rows, "generate")
+    assert generate["mean"] == 2.0
+    assert generate["total"] == 4.0
+    assert generate["n"] == 2
+    rerank = _latency_stats(rows, "rerank")
+    assert rerank["n"] == 1
+    assert rerank["mean"] == 0.4
