@@ -1,7 +1,7 @@
-import logging
 import math
 import re
 import sys
+import time
 
 from adpater.database_adapter import DatabaseAdapter
 from adpater.embedding_adapter import EmbeddingAdapter
@@ -9,7 +9,13 @@ from adpater.generation_adapter import GenerationAdapter
 from adpater.rerank_adapter import RerankerAdapter
 from rag.config import ROUTE_MODEL
 from rag.generate import generate
-from rag.logutil import configure_logging, log, logger
+from rag.logutil import (
+    disable_question_log,
+    enable_question_log,
+    log,
+    silence_console,
+    stage,
+)
 from rag.router import route
 
 RRF = 60
@@ -234,10 +240,13 @@ def top_ids(hits) -> str:
 
 
 def retrieve(question, embedder, model, database, reranker, n=TOP_N) -> dict:
-    rows = fold(database.rows())
+    with stage("database"):
+        rows = fold(database.rows())
     policies = catalog(rows)
-    decision = route(question, model, policies)
-    vector = embedder.embed([question], task="query")[0]
+    with stage("router"):
+        decision = route(question, model, policies)
+    with stage("embedder"):
+        vector = embedder.embed([question], task="query")[0]
     kind = decision["kind"]
     policy = decision["policy"]
     if kind == "compare" and policy not in policies:
@@ -258,8 +267,12 @@ def lookup(question, vector, rows, policies, decision, reranker, n):
         rows, lookup_pairs(policies, decision["policy"], decision["version"])
     )
     log("retrieve", f"candidates={len(chosen)}")
-    fused = hybrid(question, vector, chosen)
-    return apply_rerank(question, fused, [row["text"] for row in fused], reranker, n)
+    with stage("hybrid"):
+        fused = hybrid(question, vector, chosen)
+    with stage("rerank"):
+        return apply_rerank(
+            question, fused, [row["text"] for row in fused], reranker, n
+        )
 
 
 def compare(question, vector, rows, policies, policy, reranker, n):
@@ -269,34 +282,44 @@ def compare(question, vector, rows, policies, policy, reranker, n):
     current_rows = candidates(rows, [(policy, latest)])
     previous_rows = [] if previous is None else candidates(rows, [(policy, previous)])
     log("retrieve", f"candidates={len(current_rows) + len(previous_rows)}")
-    pairs = pair_hits(
-        hybrid(question, vector, current_rows),
-        hybrid(question, vector, previous_rows),
-    )
-    return apply_rerank(
-        question, pairs, [pair_text(pair) for pair in pairs], reranker, n
-    )
+    with stage("hybrid"):
+        pairs = pair_hits(
+            hybrid(question, vector, current_rows),
+            hybrid(question, vector, previous_rows),
+        )
+    with stage("rerank"):
+        return apply_rerank(
+            question, pairs, [pair_text(pair) for pair in pairs], reranker, n
+        )
 
 
-def main(argv=None) -> int:
+def main(argv=None, trace: bool = False) -> int:
+    started = time.perf_counter()
     argv = list(sys.argv[1:] if argv is None else argv)
     question = argv[0] if argv else ""
     db_path = argv[1] if len(argv) > 1 else "chroma"
-    configure_logging()
-    for handler in logger.handlers:
-        if handler.name == "console":
-            handler.setLevel(logging.WARNING)
-    router = GenerationAdapter(model=ROUTE_MODEL)
-    answerer = GenerationAdapter()
-    found = retrieve(
-        question,
-        embedder=EmbeddingAdapter(),
-        model=router,
-        database=DatabaseAdapter(db_path),
-        reranker=RerankerAdapter(),
-    )
-    text = generate(question, found["kind"], found["hits"], answerer)
-    print(text)
+    if trace:
+        enable_question_log()
+    else:
+        silence_console()
+    try:
+        router = GenerationAdapter(model=ROUTE_MODEL)
+        answerer = GenerationAdapter()
+        found = retrieve(
+            question,
+            embedder=EmbeddingAdapter(),
+            model=router,
+            database=DatabaseAdapter(db_path),
+            reranker=RerankerAdapter(),
+        )
+        text = generate(question, found["kind"], found["hits"], answerer)
+        print(text)
+        if trace:
+            elapsed = time.perf_counter() - started
+            print(f"latency: {elapsed:.3f}s")
+    finally:
+        if trace:
+            disable_question_log()
     return 0
 
 
