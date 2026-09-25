@@ -10,3 +10,5 @@ chroma/
 .ruff_cache/
 explanation.md
 .env
+lab-submission.pdf
+lab-submission.docx
