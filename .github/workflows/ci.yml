@@ -51,3 +51,6 @@ jobs:
 
       - name: Unit and integration tests
         run: pytest
+
+      - name: Evaluate
+        run: python -m rag.eval --output results/result.json
