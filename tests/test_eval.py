@@ -122,6 +122,12 @@ def test_fixed_set_retrieval_and_answers(capsys):
             }
         )
     totals = aggregate(rows)
+    results = ROOT / "results"
+    results.mkdir(exist_ok=True)
+    (results / "result.json").write_text(
+        json.dumps({"totals": totals, "rows": rows}, indent=2),
+        encoding="utf-8",
+    )
     report = format_report(rows, totals)
     with capsys.disabled():
         print(report)
