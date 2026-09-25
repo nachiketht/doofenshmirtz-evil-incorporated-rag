@@ -34,9 +34,7 @@ def _print_summary(policy_id: str, nodes: list[TextNode]) -> None:
         status = node.metadata.get("change_status") or "v1"
         counts[status] += 1
     parent_ids = {
-        node.metadata["parent_id"]
-        for node in nodes
-        if node.metadata.get("parent_id")
+        node.metadata["parent_id"] for node in nodes if node.metadata.get("parent_id")
     }
     parents = len(parent_ids)
     leaves = sum(1 for node in nodes if node.metadata.get("node_role") == "leaf")

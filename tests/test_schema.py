@@ -1,13 +1,13 @@
 """Schema validation for the router LLM payload and the generation JSON."""
 
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from generation.__main__ import _assert_schema_keys
 from generation.respond import build_generation_response
 from generation.schema import GenerationResponse, RetrievedChunk, generation_json_schema
 from retrieval.hybrid import FusedHit
-from retrieval.route import RouteDecision, SCHEMA_RETRIES, route
+from retrieval.route import SCHEMA_RETRIES, RouteDecision, route
 from retrieval.schema import RouterOutput, router_json_schema
 
 _CHUNK = {
@@ -28,7 +28,10 @@ def test_router_json_schema_contract() -> None:
 def test_router_output_accepts_current_and_history() -> None:
     assert RouterOutput.model_validate({"lane": "current"}).lane == "current"
     assert RouterOutput.model_validate({"lane": "HISTORY"}).lane == "history"
-    assert RouterOutput.model_validate({"lane": "current", "noise": True}).lane == "current"
+    assert (
+        RouterOutput.model_validate({"lane": "current", "noise": True}).lane
+        == "current"
+    )
 
 
 def test_router_output_rejects_missing_or_invalid_lane() -> None:
@@ -41,7 +44,7 @@ def test_route_retries_invalid_lane_then_accepts() -> None:
     calls = {"n": 0}
 
     class _Flaky:
-        def complete_json(self, prompt, schema=None):
+        def complete_json(self, prompt: str, schema: dict | None = None) -> dict:
             assert schema == router_json_schema()
             calls["n"] += 1
             if calls["n"] == 1:
@@ -56,7 +59,7 @@ def test_route_retries_invalid_lane_then_accepts() -> None:
 
 def test_route_falls_back_when_schema_never_validates() -> None:
     class _AlwaysBad:
-        def complete_json(self, prompt, schema=None):
+        def complete_json(self, prompt: str, schema: dict | None = None) -> dict:
             return {"lane": "nope"}
 
     decision = route("How many gym sessions?", llm=_AlwaysBad())
@@ -70,7 +73,12 @@ def test_generation_json_schema_contract() -> None:
     assert schema["additionalProperties"] is False
     items = schema["properties"]["retrieved_chunks"]
     assert items["maxItems"] == 5
-    assert items["items"]["required"] == ["policy_id", "version", "section", "rerank_Score"]
+    assert items["items"]["required"] == [
+        "policy_id",
+        "version",
+        "section",
+        "rerank_Score",
+    ]
 
 
 def test_retrieved_chunk_requires_alias_and_forbids_extra() -> None:
@@ -78,7 +86,9 @@ def test_retrieved_chunk_requires_alias_and_forbids_extra() -> None:
     assert chunk.rerank_score == 0.5
     assert chunk.model_dump(by_alias=True)["rerank_Score"] == 0.5
     with pytest.raises(ValidationError):
-        RetrievedChunk.model_validate({"policy_id": "p", "version": "1.0", "section": "1"})
+        RetrievedChunk.model_validate(
+            {"policy_id": "p", "version": "1.0", "section": "1"}
+        )
     with pytest.raises(ValidationError):
         RetrievedChunk.model_validate({**_CHUNK, "extra": True})
 
@@ -113,14 +123,20 @@ def test_pipeline_payload_passes_pydantic_and_json_schema() -> None:
     hit = FusedHit(
         id="hr-policy:v2.0:purpose",
         text="header\nbody",
-        metadata={"policy_id": "hr-policy", "version": "2.0", "section_path": "1. Purpose"},
+        metadata={
+            "policy_id": "hr-policy",
+            "version": "2.0",
+            "section_path": "1. Purpose",
+        },
         dense_rank=1,
         sparse_rank=None,
         dense_score=0.4,
         sparse_score=None,
         rerank_score=0.81,
     )
-    payload = build_generation_response("You can.", [hit], RouteDecision(lane="current", source="llm"))
+    payload = build_generation_response(
+        "You can.", [hit], RouteDecision(lane="current", source="llm")
+    )
     dumped = payload.model_dump(by_alias=True)
     GenerationResponse.model_validate(dumped)
     _assert_schema_keys(dumped, generation_json_schema())

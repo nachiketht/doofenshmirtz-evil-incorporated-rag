@@ -28,7 +28,9 @@ def resolve_nodes(versions: list[PolicyVersion]) -> list[TextNode]:
     """
     if not versions:
         return []
-    ordered = sorted(versions, key=lambda item: tuple(int(part) for part in item.version.split(".")))
+    ordered = sorted(
+        versions, key=lambda item: tuple(int(part) for part in item.version.split("."))
+    )
     stored: dict[str, list[_StoredSection]] = {}
     for index, policy in enumerate(ordered):
         if index == 0:

@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -183,7 +185,6 @@ def run_eval(gold_cases: list[dict]) -> dict[str, dict]:
             "latency_s": latency_s,
         }
 
-
     summary = _summary(rows)
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_PATH.write_text(
@@ -207,7 +208,7 @@ def _round_s(seconds: float) -> float:
     return round(seconds, 3)
 
 
-def _latency_stats(rows: dict[str, dict], key: str) -> dict:
+def _latency_stats(rows: Mapping[str, Any], key: str) -> dict:
     values = [
         row["latency_s"][key]
         for row in rows.values()

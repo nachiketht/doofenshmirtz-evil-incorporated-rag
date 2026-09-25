@@ -16,7 +16,12 @@ import httpx
 
 from adapter.chat_adapter import OllamaChatAdapter
 from ingestion.config import STORAGE_DIR
-from retrieval.config import DENSE_CANDIDATES, RERANK_TOP_N, SPARSE_CANDIDATES, RouterSettings
+from retrieval.config import (
+    DENSE_CANDIDATES,
+    RERANK_TOP_N,
+    SPARSE_CANDIDATES,
+    RouterSettings,
+)
 from retrieval.dense import dense_search
 from retrieval.filters import chroma_where
 from retrieval.hybrid import FusedHit, fuse_hits
@@ -90,7 +95,9 @@ def main() -> None:
     _write_csv(args.out, rows)
     print(f"Wrote {args.out}", file=sys.stderr)
     if args.json:
-        print(json.dumps({"summary": summary, "rows": rows}, indent=2, ensure_ascii=False))
+        print(
+            json.dumps({"summary": summary, "rows": rows}, indent=2, ensure_ascii=False)
+        )
         return
     print(_markdown(summary, rows))
 
@@ -176,7 +183,9 @@ def _write_csv(path: Path, rows: list[dict]) -> None:
         writer = csv.DictWriter(handle, fieldnames=list(_COLUMNS))
         writer.writeheader()
         for row in rows:
-            writer.writerow({key: "" if row[key] is None else row[key] for key in _COLUMNS})
+            writer.writerow(
+                {key: "" if row[key] is None else row[key] for key in _COLUMNS}
+            )
 
 
 def _markdown(summary: dict, rows: list[dict]) -> str:

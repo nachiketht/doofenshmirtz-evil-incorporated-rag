@@ -55,14 +55,14 @@ def fuse_hits(dense: list[DenseHit], sparse: list[SparseHit]) -> list[FusedHit]:
     sparse_score: dict[str, float] = {}
     payloads: dict[str, tuple[str, dict]] = {}
 
-    for rank, hit in enumerate(dense, start=1):
-        dense_rank[hit.id] = rank
-        dense_score[hit.id] = hit.score
-        payloads[hit.id] = (hit.text, hit.metadata)
-    for rank, hit in enumerate(sparse, start=1):
-        sparse_rank[hit.id] = rank
-        sparse_score[hit.id] = hit.score
-        payloads.setdefault(hit.id, (hit.text, hit.metadata))
+    for rank, dense_hit in enumerate(dense, start=1):
+        dense_rank[dense_hit.id] = rank
+        dense_score[dense_hit.id] = dense_hit.score
+        payloads[dense_hit.id] = (dense_hit.text, dense_hit.metadata)
+    for rank, sparse_hit in enumerate(sparse, start=1):
+        sparse_rank[sparse_hit.id] = rank
+        sparse_score[sparse_hit.id] = sparse_hit.score
+        payloads.setdefault(sparse_hit.id, (sparse_hit.text, sparse_hit.metadata))
 
     return [
         FusedHit(

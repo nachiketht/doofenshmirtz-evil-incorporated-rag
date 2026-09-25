@@ -57,7 +57,9 @@ def _assert_schema_keys(payload: dict, schema: dict) -> None:
     missing = required - keys
     extra = keys - allowed
     if missing or extra:
-        raise ValueError(f"JSON schema mismatch (missing={sorted(missing)} extra={sorted(extra)})")
+        raise ValueError(
+            f"JSON schema mismatch (missing={sorted(missing)} extra={sorted(extra)})"
+        )
     chunks = payload.get("retrieved_chunks")
     if not isinstance(chunks, list) or len(chunks) > 5:
         raise ValueError("retrieved_chunks must be a list of at most 5 items")

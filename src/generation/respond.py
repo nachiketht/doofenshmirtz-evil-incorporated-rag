@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from adapter.chat_adapter import OllamaChatAdapter
+from generation.generate import generate_answer
 from generation.schema import GenerationResponse, RetrievedChunk
 from retrieval.config import RERANK_TOP_N
-from generation.generate import generate_answer
 from retrieval.hybrid import FusedHit, hybrid_search
 from retrieval.rerank import rerank_hits
 from retrieval.route import RouteDecision, route

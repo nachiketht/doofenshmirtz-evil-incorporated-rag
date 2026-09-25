@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 from llama_index.core.embeddings import BaseEmbedding
 from pydantic import Field
@@ -24,14 +26,14 @@ class OllamaEmbeddingAdapter(BaseEmbedding):
         model_name: str = DEFAULT_EMBED_MODEL,
         base_url: str = DEFAULT_OLLAMA_BASE_URL,
         embed_batch_size: int = 16,
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
             model_name=model_name,
-            base_url=base_url,
             embed_batch_size=embed_batch_size,
             **kwargs,
         )
+        self.base_url = base_url
 
     def _post(self, texts: list[str]) -> list[list[float]]:
         if not texts:

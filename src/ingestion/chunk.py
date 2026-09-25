@@ -7,7 +7,11 @@ import re
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import TextNode
 
-from ingestion.config import FALLBACK_CHUNK_OVERLAP, FALLBACK_CHUNK_TOKENS, LEAF_WORD_LIMIT
+from ingestion.config import (
+    FALLBACK_CHUNK_OVERLAP,
+    FALLBACK_CHUNK_TOKENS,
+    LEAF_WORD_LIMIT,
+)
 from ingestion.load import PolicyVersion, Section
 
 _splitter = SentenceSplitter(
@@ -57,7 +61,9 @@ def section_nodes(
             )
         ]
 
-    child_specs = _child_specs(policy, section, version, section_slug, header, section_label)
+    child_specs = _child_specs(
+        policy, section, version, section_slug, header, section_label
+    )
     return [
         _leaf(
             node_id=spec_id,
@@ -93,7 +99,9 @@ def _child_specs(
         return specs
 
     text = _leaf_text(header, section.intro)
-    return _maybe_split(f"{policy.policy_id}:v{version}:{section_slug}", text, section_label)
+    return _maybe_split(
+        f"{policy.policy_id}:v{version}:{section_slug}", text, section_label
+    )
 
 
 def _maybe_split(node_id: str, text: str, path: str) -> list[tuple[str, str, str]]:

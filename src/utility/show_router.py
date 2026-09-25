@@ -29,8 +29,12 @@ _SAMPLES = (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Show router output for policy questions.")
-    parser.add_argument("queries", nargs="*", help="Questions to route. Default: built-in samples.")
+    parser = argparse.ArgumentParser(
+        description="Show router output for policy questions."
+    )
+    parser.add_argument(
+        "queries", nargs="*", help="Questions to route. Default: built-in samples."
+    )
     parser.add_argument(
         "--llm",
         action="store_true",

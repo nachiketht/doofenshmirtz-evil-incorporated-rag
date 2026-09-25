@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from adapter.chat_adapter import OllamaChatAdapter
 from retrieval.config import GenerateSettings
 from retrieval.hybrid import FusedHit
+
+
+class TextChatClient(Protocol):
+    def complete(self, prompt: str) -> str: ...
 
 
 def generate_answer(
     query: str,
     hits: list[FusedHit],
     *,
-    llm: OllamaChatAdapter | None = None,
+    llm: TextChatClient | None = None,
 ) -> str:
     if not hits:
         return "No policy excerpts were retrieved for this question."
@@ -42,7 +48,7 @@ def _prompt(query: str, hits: list[FusedHit]) -> str:
     blocks = [_excerpt(hit) for hit in hits]
     excerpts = "\n\n".join(blocks)
     return (
-                "You are a policy assistant for Doofenshmirtz Evil Incorporated. "
+        "You are a policy assistant for Doofenshmirtz Evil Incorporated. "
         "Answer the employee's question using ONLY the excerpts below.\n\n"
         "Grounding:\n"
         "- If the excerpts fully answer the question, state the rule.\n"
@@ -111,8 +117,12 @@ def _citation(hit: FusedHit) -> dict:
         "change_status": status or "current",
         "source_file": source_file,
         "dense_score": None if hit.dense_score is None else round(hit.dense_score, 4),
-        "sparse_score": None if hit.sparse_score is None else round(hit.sparse_score, 4),
-        "rerank_score": None if hit.rerank_score is None else round(hit.rerank_score, 4),
+        "sparse_score": None
+        if hit.sparse_score is None
+        else round(hit.sparse_score, 4),
+        "rerank_score": None
+        if hit.rerank_score is None
+        else round(hit.rerank_score, 4),
         "dense_rank": hit.dense_rank,
         "sparse_rank": hit.sparse_rank,
         "display": (

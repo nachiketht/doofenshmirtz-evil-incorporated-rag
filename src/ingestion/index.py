@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from llama_index.core.schema import MetadataMode, TextNode
+from llama_index.core.schema import BaseNode, MetadataMode, TextNode
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from adapter.db_adapter import ChromaDbAdapter
@@ -38,7 +38,9 @@ class PolicyIndex:
 
         self._delete_policy_leaves(policy_id)
         if leaves:
-            self._vector_store.add(leaves)
+            leaf_nodes: list[BaseNode] = []
+            leaf_nodes.extend(leaves)
+            self._vector_store.add(leaf_nodes)
 
     def _ensure_dimension(self, dimension: int | None = None) -> None:
         if dimension is None:

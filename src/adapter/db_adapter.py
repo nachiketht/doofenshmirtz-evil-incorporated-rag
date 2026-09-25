@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import chromadb
 
@@ -59,7 +60,7 @@ class ChromaDbAdapter:
         )
 
     @property
-    def collection(self):
+    def collection(self) -> Any:
         return self._collection
 
     def count(self) -> int:
@@ -72,8 +73,8 @@ class ChromaDbAdapter:
         n_results: int,
         where: dict | None = None,
         include: list[str] | None = None,
-    ) -> dict:
-        kwargs: dict = {
+    ) -> Any:
+        kwargs: dict[str, Any] = {
             "query_embeddings": [embedding],
             "n_results": n_results,
             "include": include or ["documents", "metadatas", "distances"],
@@ -88,8 +89,8 @@ class ChromaDbAdapter:
         where: dict | None = None,
         include: list[str] | None = None,
         ids: list[str] | None = None,
-    ) -> dict:
-        kwargs: dict = {"include": include or ["documents", "metadatas"]}
+    ) -> Any:
+        kwargs: dict[str, Any] = {"include": include or ["documents", "metadatas"]}
         if where is not None:
             kwargs["where"] = where
         if ids is not None:

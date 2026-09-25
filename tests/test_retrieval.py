@@ -1,7 +1,7 @@
 """Minimal retrieval unit tests. No Chroma, Ollama, or Cohere."""
 
-from pydantic import ValidationError
 import pytest
+from pydantic import ValidationError
 
 from retrieval.dense import DenseHit
 from retrieval.filters import chroma_where
@@ -14,12 +14,19 @@ from retrieval.sparse import SparseHit, _indexed, _tokenize
 
 def test_route_rules_current_versus_history() -> None:
     assert route("How many gym sessions per week?", rules_only=True).lane == "current"
-    assert route("What changed for token allocation?", rules_only=True).lane == "history"
-    assert route("What did version 1 say about foosball?", rules_only=True).lane == "history"
+    assert (
+        route("What changed for token allocation?", rules_only=True).lane == "history"
+    )
+    assert (
+        route("What did version 1 say about foosball?", rules_only=True).lane
+        == "history"
+    )
 
 
 def test_chroma_where_current_drops_stale() -> None:
-    assert chroma_where(RouteDecision(lane="current")) == {"change_status": {"$ne": "stale"}}
+    assert chroma_where(RouteDecision(lane="current")) == {
+        "change_status": {"$ne": "stale"}
+    }
     assert chroma_where(RouteDecision(lane="history")) is None
 
 
@@ -50,7 +57,9 @@ def test_rerank_hits_follows_client_order() -> None:
     )
 
     class _Client:
-        def rerank(self, query, documents, *, top_n):
+        def rerank(
+            self, query: str, documents: list[str], *, top_n: int
+        ) -> list[tuple[int, float]]:
             assert documents == ["first", "second"]
             return [(1, 0.9), (0, 0.2)][:top_n]
 
@@ -81,7 +90,7 @@ def test_tokenize_and_indexed_text() -> None:
 
 def test_route_uses_llm_then_falls_back_to_regex() -> None:
     class _Ok:
-        def complete_json(self, prompt, schema=None):
+        def complete_json(self, prompt: str, schema: dict | None = None) -> dict:
             return {"lane": "history"}
 
     llm_hit = route("How many gym sessions?", llm=_Ok())
@@ -89,7 +98,7 @@ def test_route_uses_llm_then_falls_back_to_regex() -> None:
     assert llm_hit.source == "llm"
 
     class _BadJson:
-        def complete_json(self, prompt, schema=None):
+        def complete_json(self, prompt: str, schema: dict | None = None) -> dict:
             raise RuntimeError("JSON explode")
 
     fallback = route("How many gym sessions?", llm=_BadJson())

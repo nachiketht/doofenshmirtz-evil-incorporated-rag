@@ -7,6 +7,7 @@ import json
 import re
 import sys
 from dataclasses import asdict, dataclass
+from typing import Any, Protocol
 
 from pydantic import ValidationError
 
@@ -25,6 +26,12 @@ _HISTORY_RE = re.compile(
 SCHEMA_RETRIES = 2
 
 
+class JsonChatClient(Protocol):
+    def complete_json(
+        self, prompt: str, schema: dict | None = None
+    ) -> dict[str, Any]: ...
+
+
 @dataclass(frozen=True)
 class RouteDecision:
     lane: str
@@ -34,7 +41,7 @@ class RouteDecision:
 def route(
     query: str,
     *,
-    llm: OllamaChatAdapter | None = None,
+    llm: JsonChatClient | None = None,
     rules_only: bool = False,
 ) -> RouteDecision:
     """Classify current vs history. Regex is used only if the model fails."""
@@ -43,7 +50,13 @@ def route(
         return rules
     try:
         return _from_llm(query, llm)
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError, ValidationError) as exc:
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        json.JSONDecodeError,
+        ValidationError,
+    ) as exc:
         print(f"Router LLM failed ({exc}); using regex fallback.", file=sys.stderr)
         return rules
 
@@ -53,7 +66,7 @@ def _from_rules(query: str) -> RouteDecision:
     return RouteDecision(lane=lane)
 
 
-def _from_llm(query: str, llm: OllamaChatAdapter) -> RouteDecision:
+def _from_llm(query: str, llm: JsonChatClient) -> RouteDecision:
     schema = router_json_schema()
     prompt = _prompt(query)
     error: Exception | None = None
@@ -105,7 +118,9 @@ def _prompt(query: str) -> str:
 
 def _repair_prompt(query: str, payload: dict | None, error: Exception) -> str:
     previous = (
-        json.dumps(payload, indent=2) if payload is not None else "(invalid or empty JSON)"
+        json.dumps(payload, indent=2)
+        if payload is not None
+        else "(invalid or empty JSON)"
     )
     return (
         f"{_prompt(query)}\n"

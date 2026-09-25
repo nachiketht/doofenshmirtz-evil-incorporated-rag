@@ -3,10 +3,21 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Protocol
 
 from adapter.rerank_adapter import CohereRerankAdapter
 from retrieval.config import RERANK_TOP_N
 from retrieval.hybrid import FusedHit
+
+
+class RerankClient(Protocol):
+    def rerank(
+        self,
+        query: str,
+        documents: list[str],
+        *,
+        top_n: int,
+    ) -> list[tuple[int, float]]: ...
 
 
 def rerank_hits(
@@ -14,7 +25,7 @@ def rerank_hits(
     hits: list[FusedHit],
     *,
     top_n: int = RERANK_TOP_N,
-    client: CohereRerankAdapter | None = None,
+    client: RerankClient | None = None,
 ) -> list[FusedHit]:
     if not hits:
         return []

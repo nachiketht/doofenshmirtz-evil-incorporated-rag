@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import httpx
 
@@ -40,7 +41,7 @@ class OllamaChatAdapter:
             raise RuntimeError("Ollama returned an empty completion.")
         return raw.strip()
 
-    def complete_json(self, prompt: str, schema: dict | None = None) -> dict:
+    def complete_json(self, prompt: str, schema: dict | None = None) -> dict[str, Any]:
         try:
             response = httpx.post(
                 f"{self.base_url}/api/generate",
@@ -59,10 +60,10 @@ class OllamaChatAdapter:
         payload = response.json()
         raw = payload.get("response")
         if isinstance(raw, dict):
-            return raw
+            return {str(key): value for key, value in raw.items()}
         if not isinstance(raw, str) or not raw.strip():
             raise RuntimeError("Ollama returned an empty JSON completion.")
         parsed = json.loads(raw)
         if not isinstance(parsed, dict):
             raise RuntimeError("Ollama JSON completion was not an object.")
-        return parsed
+        return {str(key): value for key, value in parsed.items()}

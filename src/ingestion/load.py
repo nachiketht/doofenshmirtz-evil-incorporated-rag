@@ -188,13 +188,17 @@ def _sections_from_blocks(blocks: list[str]) -> list[Section]:
         section_match = SECTION_RE.match(block)
         subsection_match = SUBSECTION_RE.match(block)
         if section_match and subsection_match is None:
-            current = Section(number=section_match.group(1), title=section_match.group(2).strip())
+            current = Section(
+                number=section_match.group(1), title=section_match.group(2).strip()
+            )
             sections.append(current)
             continue
         if current is None:
             continue
         if subsection_match:
-            current.subsections.append(_parse_subsection(subsection_match.group(1), subsection_match.group(2)))
+            current.subsections.append(
+                _parse_subsection(subsection_match.group(1), subsection_match.group(2))
+            )
             continue
         if current.subsections:
             previous = current.subsections[-1]

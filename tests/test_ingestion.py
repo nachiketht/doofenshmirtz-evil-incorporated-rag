@@ -6,11 +6,11 @@ from ingestion.load import (
     PolicyVersion,
     Section,
     Subsection,
-    group_by_policy,
-    title_key,
     _identity,
     _sections_from_blocks,
     _slug,
+    group_by_policy,
+    title_key,
 )
 
 
@@ -40,7 +40,9 @@ def test_title_key_ignores_number_and_version_note() -> None:
 
 def test_section_nodes_plain_leaf_has_empty_parent() -> None:
     section = Section(number="1", title="Purpose", intro="Keep the company running.")
-    nodes = section_nodes(_policy("1.0", [section]), section, version="1.0", change_status="")
+    nodes = section_nodes(
+        _policy("1.0", [section]), section, version="1.0", change_status=""
+    )
     assert len(nodes) == 1
     assert nodes[0].metadata["parent_id"] == ""
     assert nodes[0].metadata["node_role"] == "leaf"
@@ -51,9 +53,13 @@ def test_section_nodes_subsections_set_parent_id() -> None:
     section = Section(
         number="3",
         title="Email",
-        subsections=[Subsection(number="3.1", title="Requirement", body="Start with a joke.")],
+        subsections=[
+            Subsection(number="3.1", title="Requirement", body="Start with a joke.")
+        ],
     )
-    nodes = section_nodes(_policy("2.0", [section]), section, version="2.0", change_status="added")
+    nodes = section_nodes(
+        _policy("2.0", [section]), section, version="2.0", change_status="added"
+    )
     assert len(nodes) == 1
     assert nodes[0].metadata["parent_id"]
     assert nodes[0].metadata["change_status"] == "added"
@@ -75,7 +81,9 @@ def test_resolve_nodes_marks_unchanged_stale_and_added() -> None:
         ],
     )
     statuses = {
-        (node.metadata["section_title"], node.metadata["version"]): node.metadata["change_status"]
+        (node.metadata["section_title"], node.metadata["version"]): node.metadata[
+            "change_status"
+        ]
         for node in resolve_nodes([v1, v2])
     }
     assert statuses[("Purpose", "1.0")] == "stale"
@@ -93,13 +101,17 @@ def test_resolve_nodes_empty_and_dropped_section() -> None:
 
 
 def test_identity_and_slug_from_heading() -> None:
-    title, version = _identity("Health & Wellness Policy - Version 1.0\nBody", "ignored.pdf")
+    title, version = _identity(
+        "Health & Wellness Policy - Version 1.0\nBody", "ignored.pdf"
+    )
     assert title == "Health & Wellness Policy"
     assert version == "1.0"
     assert _slug(title) == "health-and-wellness-policy"
 
 
 def test_sections_from_blocks_parses_heading_and_intro() -> None:
-    sections = _sections_from_blocks(["1. Purpose", "Keep the company running.", "2. Scope"])
+    sections = _sections_from_blocks(
+        ["1. Purpose", "Keep the company running.", "2. Scope"]
+    )
     assert [section.number for section in sections] == ["1", "2"]
     assert sections[0].intro == "Keep the company running."
