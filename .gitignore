@@ -1,6 +1,7 @@
 PLAN.md
 storage/
 cache/
+.env
 
 __pycache__/
 *.py[cod]

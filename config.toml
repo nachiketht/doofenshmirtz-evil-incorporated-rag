@@ -1,0 +1,32 @@
+# Central app config. Secrets stay in .env (COHERE_API_KEY, optional OLLAMA_* overrides).
+
+[paths]
+docs = "docs"
+storage = "storage"
+chroma = "storage/chroma"
+
+[chroma]
+collection = "dei_policies"
+space = "cosine"
+
+[ollama]
+base_url = "http://localhost:11434"
+host_docker_url = "http://host.docker.internal:11434"
+embed_model = "embeddinggemma"
+router_model = "qwen3:4b"
+generate_model = "gemma3:12b"
+generate_timeout = 300.0
+
+[chunk]
+leaf_word_limit = 500
+fallback_chunk_tokens = 650
+fallback_chunk_overlap = 130
+
+[retrieval]
+dense_candidates = 10
+sparse_candidates = 10
+rerank_top_n = 5
+
+[cohere]
+rerank_model = "rerank-v3.5"
+rerank_url = "https://api.cohere.com/v2/rerank"

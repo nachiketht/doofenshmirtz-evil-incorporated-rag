@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import math
 import re
-from collections import Counter
 from dataclasses import dataclass
+
+from rank_bm25 import BM25Okapi
 
 from ingestion.config import Settings
 from retrieval.config import SPARSE_CANDIDATES
@@ -35,16 +35,18 @@ def sparse_search(
     leaves = fetch_leaves(decision, settings=settings)
     if not leaves:
         return []
-    query_tokens = tokenize(query)
+    query_tokens = _tokenize(query)
     if not query_tokens:
         return []
-    corpus = [tokenize(_indexed(text, metadata)) for _, text, metadata in leaves]
-    scores = _bm25(corpus, query_tokens)
+    corpus = [_tokenize(_indexed(text, metadata)) for _, text, metadata in leaves]
+    if not any(corpus):
+        return []
+    scores = BM25Okapi(corpus, k1=_K1, b=_B).get_scores(query_tokens)
     ranked = sorted(
         (
-            SparseHit(id=node_id, text=text, metadata=metadata, score=score)
+            SparseHit(id=node_id, text=text, metadata=metadata, score=float(score))
             for (node_id, text, metadata), score in zip(leaves, scores, strict=True)
-            if score > 0
+            if float(score) > 0
         ),
         key=lambda hit: hit.score,
         reverse=True,
@@ -52,7 +54,7 @@ def sparse_search(
     return ranked[:k]
 
 
-def tokenize(text: str) -> list[str]:
+def _tokenize(text: str) -> list[str]:
     return _TOKEN.findall(text.lower())
 
 
@@ -61,28 +63,3 @@ def _indexed(text: str, metadata: dict) -> str:
     if path:
         return f"{path}\n{text}"
     return text
-
-
-def _bm25(corpus: list[list[str]], query_tokens: list[str]) -> list[float]:
-    n_docs = len(corpus)
-    avgdl = sum(len(doc) for doc in corpus) / n_docs
-    df: Counter[str] = Counter()
-    for doc in corpus:
-        df.update(set(doc))
-    idf = {
-        term: math.log((n_docs - df[term] + 0.5) / (df[term] + 0.5) + 1.0)
-        for term in set(query_tokens)
-    }
-    scores = [0.0] * n_docs
-    for index, doc in enumerate(corpus):
-        tf = Counter(doc)
-        length = len(doc) or 1
-        total = 0.0
-        for term in query_tokens:
-            freq = tf.get(term, 0)
-            if not freq:
-                continue
-            denom = freq + _K1 * (1.0 - _B + _B * length / avgdl)
-            total += idf[term] * (freq * (_K1 + 1.0) / denom)
-        scores[index] = total
-    return scores

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 
-import chromadb
 from llama_index.core.schema import TextNode
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
+from adapter.db_adapter import ChromaDbAdapter
 from ingestion.config import Settings
 
 
@@ -21,19 +21,8 @@ def main() -> None:
 
 
 def _load_leaves(settings: Settings) -> list[TextNode]:
-    if not settings.chroma_dir.exists():
-        raise FileNotFoundError(
-            f"No Chroma index at {settings.chroma_dir}. Ingest first."
-        )
-    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-    try:
-        collection = client.get_collection(settings.collection_name)
-    except Exception as exc:
-        raise FileNotFoundError(
-            f"No collection {settings.collection_name!r} in {settings.chroma_dir}. "
-            "Ingest first."
-        ) from exc
-    store = ChromaVectorStore(chroma_collection=collection)
+    db = ChromaDbAdapter.from_settings(settings)
+    store = ChromaVectorStore(chroma_collection=db.collection)
     nodes = store.get_nodes(node_ids=None)
     return [node for node in nodes if isinstance(node, TextNode)]
 
@@ -77,7 +66,6 @@ def _sample(nodes: list[TextNode], limit: int = 4) -> list[TextNode]:
 def _chunk(node: TextNode) -> dict:
     return {
         "id": node.node_id,
-        "embedding": [],
         "text": node.get_content(),
         "metadata": node.metadata,
     }

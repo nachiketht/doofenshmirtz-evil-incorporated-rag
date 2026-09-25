@@ -1,6 +1,6 @@
-"""Answer a policy question: route, hybrid retrieve, generate. No rerank yet.
+"""Answer a policy question: route, hybrid retrieve, Cohere rerank, generate.
 
-Default is the full pipeline (qwen3:4b router + RRF + gemma3:12b).
+Default is the full pipeline (qwen3:4b router + 10/10 union + rerank-v3.5 + gemma3:12b).
 
 Run with: python -m utility.show_answer "what changed for the foosball rules?"
 """
@@ -14,16 +14,17 @@ import sys
 import httpx
 
 from adapter.chat_adapter import OllamaChatAdapter
-from retrieval.config import GENERATE_CONTEXT, GenerateSettings, RouterSettings
+from retrieval.config import RERANK_TOP_N, GenerateSettings, RouterSettings
 from retrieval.filters import chroma_where
-from retrieval.generate import citations_for, format_sources, generate_answer
+from generation.generate import citations_for, format_sources, generate_answer
 from retrieval.hybrid import hybrid_search
+from retrieval.rerank import rerank_hits
 from retrieval.route import route
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Answer a policy question from hybrid (RRF) hits."
+        description="Answer a policy question from Cohere-reranked hybrid hits."
     )
     parser.add_argument("query", help="Employee question")
     parser.add_argument(
@@ -34,8 +35,8 @@ def main() -> None:
     parser.add_argument(
         "-k",
         type=int,
-        default=GENERATE_CONTEXT,
-        help=f"Fused excerpts to send to the generator (default {GENERATE_CONTEXT})",
+        default=RERANK_TOP_N,
+        help=f"Cohere rerank top-n sent to the generator (default {RERANK_TOP_N})",
     )
     parser.add_argument(
         "--json",
@@ -45,7 +46,7 @@ def main() -> None:
     args = parser.parse_args()
     router_llm = None if args.rules_only else _router_llm()
     decision = route(args.query, llm=router_llm, rules_only=router_llm is None)
-    hits = hybrid_search(args.query, decision, k=args.k)
+    hits = rerank_hits(args.query, hybrid_search(args.query, decision), top_n=args.k)
     citations = citations_for(hits)
     answer = generate_answer(args.query, hits, llm=_generator())
     payload = {

@@ -1,0 +1,111 @@
+{
+  "cases": [
+    {
+      "id": "gym-minimum",
+      "query": "How many gym sessions per week am I expected to complete, and how long is each session?",
+      "expected_lane": "current",
+      "gold_chunk_ids": [
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement"
+      ],
+      "require_all_gold": true,
+      "answer_any": [["three", "3"], ["45"]]
+    },
+    {
+      "id": "intern-gym-exempt",
+      "query": "Are interns required to meet the gym attendance minimum?",
+      "expected_lane": "current",
+      "gold_chunk_ids": ["health-and-wellness-policy:v1.0:scope"],
+      "require_all_gold": true,
+      "answer_any": [
+        ["exempt", "not required", "aren't required", "are not required", "do not have to", "don't have to"]
+      ]
+    },
+    {
+      "id": "caffeine-limit",
+      "query": "What is the recommended daily caffeine limit?",
+      "expected_lane": "current",
+      "gold_chunk_ids": ["health-and-wellness-policy:v1.0:caffeine-guidelines:daily-limit"],
+      "require_all_gold": true,
+      "answer_any": [["400"]]
+    },
+    {
+      "id": "dog-adoption-leave",
+      "query": "How many paid days off do I get if I adopt a dog?",
+      "expected_lane": "current",
+      "gold_chunk_ids": ["hr-policy:v2.0:pet-adoption-leave:leave-entitlement"],
+      "require_all_gold": true,
+      "answer_any": [["7"]]
+    },
+    {
+      "id": "email-joke",
+      "query": "Do company emails have to include a joke?",
+      "expected_lane": "current",
+      "gold_chunk_ids": ["hr-policy:v2.0:email-tone-requirement:requirement"],
+      "require_all_gold": true,
+      "answer_any": [["joke"]]
+    },
+    {
+      "id": "foosball-winner-tokens",
+      "query": "What is the winner-takes-tokens foosball rule?",
+      "expected_lane": "current",
+      "gold_chunk_ids": [
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule"
+      ],
+      "require_all_gold": true,
+      "answer_any": [["winner", "defeat", "defeats", "defeated"], ["token"]]
+    },
+    {
+      "id": "token-allocation-current",
+      "query": "How many tokens do I get at the start of each six-hour cycle?",
+      "expected_lane": "current",
+      "gold_chunk_ids": ["time-and-usage-policy:v2.0:token-allocation:allocation-amount"],
+      "require_all_gold": true,
+      "answer_any": [["500000", "500 thousand", "five hundred thousand", "half a million"]]
+    },
+    {
+      "id": "token-allocation-history",
+      "query": "What changed for token allocation compared to the old version?",
+      "expected_lane": "history",
+      "gold_chunk_ids": [
+        "time-and-usage-policy:v1.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount"
+      ],
+      "require_all_gold": true,
+      "answer_any": [
+        ["1000000", "1 million", "one million", "million"],
+        ["500000", "500 thousand", "five hundred thousand", "half a million"]
+      ]
+    },
+    {
+      "id": "hazmat-suit",
+      "query": "How can I get a hazmat suit during a nuclear event?",
+      "expected_lane": "current",
+      "gold_chunk_ids": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:equipment-eligibility"
+      ],
+      "require_all_gold": false,
+      "answer_any": [["top 10", "top ten", "leaderboard"]]
+    },
+    {
+      "id": "nuclear-shelter",
+      "query": "Where should I shelter if there is a nuclear detonation?",
+      "expected_lane": "current",
+      "gold_chunk_ids": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location"
+      ],
+      "require_all_gold": true,
+      "answer_any": [["refrigerator", "fridge", "break room"]]
+    },
+    {
+      "id": "nuclear-history-wait",
+      "query": "What did the old nuclear policy say about when we could go outside after a blast?",
+      "expected_lane": "history",
+      "gold_chunk_ids": [
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:all-clear-timing"
+      ],
+      "require_all_gold": true,
+      "answer_any": [["two hours", "two-hour", "two hour", "2 hours", "2-hour"]]
+    }
+  ]
+}

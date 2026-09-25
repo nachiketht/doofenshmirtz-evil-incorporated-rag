@@ -1,6 +1,7 @@
-"""Run the router then hybrid dense+BM25 search with RRF.
+"""Run the router then hybrid dense+BM25 search (union, de-duplicated).
 
 Run with: python -m utility.show_hybrid --llm "what changed for the foosball rules?"
+         python -m utility.show_hybrid --rerank "what changed for the foosball rules?"
 """
 
 from __future__ import annotations
@@ -12,16 +13,17 @@ import sys
 import httpx
 
 from adapter.chat_adapter import OllamaChatAdapter
-from retrieval.config import HYBRID_CANDIDATES, RouterSettings
+from retrieval.config import RERANK_TOP_N, RouterSettings
 from retrieval.filters import chroma_where
 from retrieval.hybrid import FusedHit, hybrid_search
+from retrieval.rerank import rerank_hits
 from retrieval.route import RouteDecision, route
 
 _TEXT_LIMIT = 240
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Show RRF-fused hybrid hits.")
+    parser = argparse.ArgumentParser(description="Show union of dense and BM25 hits.")
     parser.add_argument("query", help="Employee question")
     parser.add_argument(
         "--llm",
@@ -31,13 +33,20 @@ def main() -> None:
     parser.add_argument(
         "-k",
         type=int,
-        default=HYBRID_CANDIDATES,
-        help=f"Fused hit count (default {HYBRID_CANDIDATES})",
+        default=None,
+        help=f"Cohere top-n when --rerank is set (default {RERANK_TOP_N}). Ignored otherwise.",
+    )
+    parser.add_argument(
+        "--rerank",
+        action="store_true",
+        help=f"Cohere-rerank the full union and keep top {RERANK_TOP_N} (or -k).",
     )
     args = parser.parse_args()
     llm = _llm() if args.llm else None
     decision = route(args.query, llm=llm, rules_only=llm is None)
-    hits = hybrid_search(args.query, decision, k=args.k)
+    hits = hybrid_search(args.query, decision)
+    if args.rerank:
+        hits = rerank_hits(args.query, hits, top_n=args.k or RERANK_TOP_N)
     print(json.dumps(_row(args.query, decision, hits), indent=2, ensure_ascii=False))
 
 
@@ -78,7 +87,9 @@ def _hit(hit: FusedHit) -> dict:
         text = f"{text[:_TEXT_LIMIT]}..."
     return {
         "id": hit.id,
-        "rrf": round(hit.score, 6),
+        "cosine": None if hit.dense_score is None else round(hit.dense_score, 4),
+        "bm25": None if hit.sparse_score is None else round(hit.sparse_score, 4),
+        "rerank": None if hit.rerank_score is None else round(hit.rerank_score, 4),
         "dense_rank": hit.dense_rank,
         "sparse_rank": hit.sparse_rank,
         "policy_id": meta.get("policy_id"),

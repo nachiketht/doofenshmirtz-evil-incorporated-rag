@@ -10,11 +10,3 @@ def chroma_where(decision: RouteDecision) -> dict | None:
     if decision.lane == "history":
         return None
     return {"change_status": {"$ne": "stale"}}
-
-
-def matches(decision: RouteDecision, metadata: dict) -> bool:
-    """Same predicate as ``chroma_where``, for in-memory filtering."""
-    status = metadata.get("change_status") or ""
-    if decision.lane != "history" and status == "stale":
-        return False
-    return True

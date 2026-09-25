@@ -9,7 +9,7 @@ from ingestion.config import Settings
 from retrieval.config import DENSE_CANDIDATES
 from retrieval.filters import chroma_where
 from retrieval.route import RouteDecision
-from retrieval.store import get_collection
+from retrieval.store import get_db
 
 
 @dataclass(frozen=True)
@@ -34,22 +34,19 @@ def dense_search(
     k: int = DENSE_CANDIDATES,
 ) -> list[DenseHit]:
     settings = settings or Settings.from_env()
-    collection = get_collection(settings)
+    db = get_db(settings)
     embed_model = embed_model or OllamaEmbeddingAdapter(
         model_name=settings.embed_model,
         base_url=settings.ollama_base_url,
     )
     vector = embed_model.get_query_embedding(query)
-    n_results = min(k, max(collection.count(), 1))
-    kwargs: dict = {
-        "query_embeddings": [vector],
-        "n_results": n_results,
-        "include": ["documents", "metadatas", "distances"],
-    }
-    where = chroma_where(decision)
-    if where is not None:
-        kwargs["where"] = where
-    result = collection.query(**kwargs)
+    n_results = min(k, max(db.count(), 1))
+    result = db.query(
+        vector,
+        n_results=n_results,
+        where=chroma_where(decision),
+        include=["documents", "metadatas", "distances"],
+    )
     return _hits(result)
 
 

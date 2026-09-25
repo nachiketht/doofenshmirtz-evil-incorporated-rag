@@ -1,28 +1,15 @@
-"""Shared Chroma collection access for retrieval."""
+"""Shared Chroma access for retrieval via the DB adapter."""
 
 from __future__ import annotations
 
-import chromadb
-
+from adapter.db_adapter import ChromaDbAdapter
 from ingestion.config import Settings
 from retrieval.filters import chroma_where
 from retrieval.route import RouteDecision
 
 
-def get_collection(settings: Settings | None = None):
-    settings = settings or Settings.from_env()
-    if not settings.chroma_dir.exists():
-        raise FileNotFoundError(
-            f"No Chroma index at {settings.chroma_dir}. Ingest first."
-        )
-    client = chromadb.PersistentClient(path=str(settings.chroma_dir))
-    try:
-        return client.get_collection(settings.collection_name)
-    except Exception as exc:
-        raise FileNotFoundError(
-            f"No collection {settings.collection_name!r} in {settings.chroma_dir}. "
-            "Ingest first."
-        ) from exc
+def get_db(settings: Settings | None = None) -> ChromaDbAdapter:
+    return ChromaDbAdapter.from_settings(settings)
 
 
 def fetch_leaves(
@@ -31,12 +18,7 @@ def fetch_leaves(
     settings: Settings | None = None,
 ) -> list[tuple[str, str, dict]]:
     """Leaves that pass the same metadata filter as dense search."""
-    collection = get_collection(settings)
-    kwargs: dict = {"include": ["documents", "metadatas"]}
-    where = chroma_where(decision)
-    if where is not None:
-        kwargs["where"] = where
-    result = collection.get(**kwargs)
+    result = get_db(settings).get(where=chroma_where(decision))
     ids = result.get("ids") or []
     documents = result.get("documents") or []
     metadatas = result.get("metadatas") or []

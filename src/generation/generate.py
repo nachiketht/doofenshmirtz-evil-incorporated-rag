@@ -1,4 +1,4 @@
-"""Answer a question from fused hybrid hits. No rerank yet."""
+"""Answer a question from Cohere-reranked hybrid hits."""
 
 from __future__ import annotations
 
@@ -77,8 +77,15 @@ def _prompt(query: str, hits: list[FusedHit]) -> str:
 
 
 def _excerpt(hit: FusedHit) -> str:
-    cite = _citation(hit)
-    return f"({cite['status']}, version {cite['version']})\n{_leaf_body(hit.text)}"
+    meta = hit.metadata
+    status = str(meta.get("change_status") or "")
+    label = "superseded" if status == "stale" else "in force"
+    version = str(meta.get("version") or "?")
+    return f"({label}, version {version})\n{_leaf_body(hit.text)}"
+
+
+def _fmt(value: float | None) -> str:
+    return "-" if value is None else f"{value:.4f}"
 
 
 def _leaf_body(text: str) -> str:
@@ -103,12 +110,15 @@ def _citation(hit: FusedHit) -> dict:
         "status": label,
         "change_status": status or "current",
         "source_file": source_file,
-        "score": round(hit.score, 6),
+        "dense_score": None if hit.dense_score is None else round(hit.dense_score, 4),
+        "sparse_score": None if hit.sparse_score is None else round(hit.sparse_score, 4),
+        "rerank_score": None if hit.rerank_score is None else round(hit.rerank_score, 4),
         "dense_rank": hit.dense_rank,
         "sparse_rank": hit.sparse_rank,
         "display": (
             f"{title} v{version} - {path} ({label}) "
-            f"[rrf={hit.score:.6f} dense={hit.dense_rank or '-'} "
-            f"sparse={hit.sparse_rank or '-'}]"
+            f"[rerank={_fmt(hit.rerank_score)} "
+            f"cosine={_fmt(hit.dense_score)} bm25={_fmt(hit.sparse_score)} "
+            f"dense={hit.dense_rank or '-'} sparse={hit.sparse_rank or '-'}]"
         ),
     }

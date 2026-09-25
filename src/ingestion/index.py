@@ -7,23 +7,18 @@ import json
 from llama_index.core.schema import MetadataMode, TextNode
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-import chromadb
-
+from adapter.db_adapter import ChromaDbAdapter
 from adapter.embedding_adapter import OllamaEmbeddingAdapter
-from ingestion.config import COLLECTION_METADATA, Settings
+from ingestion.config import Settings
 
 
 class PolicyIndex:
     def __init__(self, settings: Settings, embed_model: OllamaEmbeddingAdapter) -> None:
         self.settings = settings
         self.embed_model = embed_model
-        self.settings.chroma_dir.mkdir(parents=True, exist_ok=True)
         self.settings.storage_dir.mkdir(parents=True, exist_ok=True)
-        self._client = chromadb.PersistentClient(path=str(self.settings.chroma_dir))
-        self._collection = self._client.get_or_create_collection(
-            name=self.settings.collection_name,
-            metadata=COLLECTION_METADATA,
-        )
+        self._db = ChromaDbAdapter.from_settings(settings, create=True)
+        self._collection = self._db.collection
         self._vector_store = ChromaVectorStore(chroma_collection=self._collection)
         self._dimension_checked = False
 
@@ -72,7 +67,7 @@ class PolicyIndex:
 
     def _reuse_embeddings(self, leaves: list[TextNode]) -> None:
         """Keep a stored vector when the section body is unchanged."""
-        existing = self._collection.get(include=["embeddings", "documents"])
+        existing = self._db.get(include=["embeddings", "documents"])
         by_body: dict[str, list[float]] = {}
         documents = existing.get("documents") or []
         embeddings = existing.get("embeddings")
@@ -89,7 +84,7 @@ class PolicyIndex:
                 leaf.embedding = reused
 
     def _delete_policy_leaves(self, policy_id: str) -> None:
-        existing = self._collection.get(where={"policy_id": policy_id})
+        existing = self._db.get(where={"policy_id": policy_id})
         ids = existing.get("ids") or []
         if ids:
             self._vector_store.delete_nodes(node_ids=ids)
