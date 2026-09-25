@@ -1,0 +1,1264 @@
+{
+  "summary": {
+    "n": 11,
+    "union_recall": {
+      "hits": 11,
+      "total": 11,
+      "score": 1.0,
+      "display": "11/11 (100.0%)"
+    },
+    "retrieval_recall": {
+      "hits": 11,
+      "total": 11,
+      "score": 1.0,
+      "display": "11/11 (100.0%)"
+    },
+    "answer_accuracy": {
+      "hits": 11,
+      "total": 11,
+      "score": 1.0,
+      "display": "11/11 (100.0%)"
+    },
+    "router_accuracy": {
+      "hits": 11,
+      "total": 11,
+      "score": 1.0,
+      "display": "11/11 (100.0%)"
+    },
+    "latency": {
+      "route": {
+        "mean": 2.397,
+        "total": 26.366,
+        "n": 11,
+        "display": "mean 2.40s  total 26.37s"
+      },
+      "retrieve": {
+        "mean": 1.168,
+        "total": 12.85,
+        "n": 11,
+        "display": "mean 1.17s  total 12.85s"
+      },
+      "rerank": {
+        "mean": 0.2,
+        "total": 2.196,
+        "n": 11,
+        "display": "mean 0.20s  total 2.20s"
+      },
+      "generate": {
+        "mean": 13.235,
+        "total": 145.588,
+        "n": 11,
+        "display": "mean 13.24s  total 145.59s"
+      },
+      "total": {
+        "mean": 17.0,
+        "total": 187.001,
+        "n": 11,
+        "display": "mean 17.00s  total 187.00s"
+      }
+    }
+  },
+  "cases": [
+    {
+      "id": "gym-minimum",
+      "query": "How many gym sessions per week am I expected to complete, and how long is each session?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement"
+      ],
+      "require_all_gold": true,
+      "union_count": 18,
+      "union_ids": [
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:adjusting-for-training-intensity",
+        "time-and-usage-policy:v2.0:video-game-time:daily-allowance",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:recommended-intake-by-body-weight-and-height",
+        "health-and-wellness-policy:v1.0:scope",
+        "health-and-wellness-policy:v1.0:purpose",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:daily-allowance",
+        "health-and-wellness-policy:v1.0:support-resources",
+        "health-and-wellness-policy:v1.0:acknowledgment",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:exceptions",
+        "preparedness-policy:v2.0:purpose",
+        "hr-policy:v2.0:shared-refrigerator-policy:cake-sharing-default",
+        "preparedness-policy:v2.0:general-preparedness-expectations-and-restocking:personal-emergency-kits",
+        "hr-policy:v2.0:pet-adoption-leave:conditions",
+        "hr-policy:v2.0:dress-code:exceptions",
+        "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:cto-discretion"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:daily-allowance",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:adjusting-for-training-intensity",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:recommended-intake-by-body-weight-and-height"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "3. Gym Routine Requirements > 3.1 Minimum Requirement",
+          "change_status": "",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.82560414
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "3. Gym Routine Requirements > 3.2 Suggested Weekly Split",
+          "change_status": "",
+          "dense_rank": 2,
+          "sparse_rank": null,
+          "rerank_score": 0.3351555
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:daily-allowance",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "4. Foosball Time and the Winner-Takes-Tokens Rule > 4.1 Daily Allowance",
+          "change_status": "added",
+          "dense_rank": 8,
+          "sparse_rank": 4,
+          "rerank_score": 0.093520775
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:protein-intake-guidelines:adjusting-for-training-intensity",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "4. Protein Intake Guidelines > 4.3 Adjusting for Training Intensity",
+          "change_status": "",
+          "dense_rank": 3,
+          "sparse_rank": null,
+          "rerank_score": 0.09048623
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:protein-intake-guidelines:recommended-intake-by-body-weight-and-height",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "4. Protein Intake Guidelines > 4.2 Recommended Intake by Body Weight and Height",
+          "change_status": "",
+          "dense_rank": 5,
+          "sparse_rank": null,
+          "rerank_score": 0.08459118
+        }
+      ],
+      "answer": "You are expected to complete a minimum of three structured training sessions per week, and each session should be at least 45 minutes long. A suggested schedule is two resistance-training days and one cardio or conditioning day, with at least one full rest day. The excerpts do not specify an upper limit on the number of gym sessions or the length of each session.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.926,
+        "retrieve": 1.404,
+        "rerank": 0.19,
+        "generate": 20.358,
+        "total": 24.878
+      }
+    },
+    {
+      "id": "intern-gym-exempt",
+      "query": "Are interns required to meet the gym attendance minimum?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "health-and-wellness-policy:v1.0:scope"
+      ],
+      "require_all_gold": true,
+      "union_count": 14,
+      "union_ids": [
+        "health-and-wellness-policy:v1.0:scope",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement",
+        "health-and-wellness-policy:v1.0:support-resources",
+        "health-and-wellness-policy:v1.0:purpose",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:adjusting-for-training-intensity",
+        "hr-policy:v2.0:dress-code:exceptions",
+        "time-and-usage-policy:v2.0:scope",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:exceptions",
+        "health-and-wellness-policy:v1.0:acknowledgment",
+        "time-and-usage-policy:v2.0:purpose",
+        "hr-policy:v2.0:shared-refrigerator-policy:weekend-abandonment-consequence",
+        "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:duration-and-exceptions",
+        "hr-policy:v2.0:boss-error-grace-period"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "health-and-wellness-policy:v1.0:scope"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "health-and-wellness-policy:v1.0:scope",
+        "health-and-wellness-policy:v1.0:purpose",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement",
+        "time-and-usage-policy:v2.0:scope",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:adjusting-for-training-intensity"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "health-and-wellness-policy:v1.0:scope"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "health-and-wellness-policy:v1.0:scope",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "2. Scope",
+          "change_status": "",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.92392945
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:purpose",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "1. Purpose",
+          "change_status": "",
+          "dense_rank": 4,
+          "sparse_rank": 3,
+          "rerank_score": 0.13442354
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "3. Gym Routine Requirements > 3.1 Minimum Requirement",
+          "change_status": "",
+          "dense_rank": 2,
+          "sparse_rank": 2,
+          "rerank_score": 0.13098438
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:scope",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "2. Scope",
+          "change_status": "added",
+          "dense_rank": 8,
+          "sparse_rank": 4,
+          "rerank_score": 0.08716692
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:protein-intake-guidelines:adjusting-for-training-intensity",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "4. Protein Intake Guidelines > 4.3 Adjusting for Training Intensity",
+          "change_status": "",
+          "dense_rank": 6,
+          "sparse_rank": null,
+          "rerank_score": 0.079217605
+        }
+      ],
+      "answer": "You are exempt from the gym attendance minimum. However, you are strongly encouraged to participate anyway.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.503,
+        "retrieve": 1.15,
+        "rerank": 0.145,
+        "generate": 10.074,
+        "total": 13.873
+      }
+    },
+    {
+      "id": "caffeine-limit",
+      "query": "What is the recommended daily caffeine limit?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:daily-limit"
+      ],
+      "require_all_gold": true,
+      "union_count": 13,
+      "union_ids": [
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:daily-limit",
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:monitoring-and-tapering",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:recommended-intake-by-body-weight-and-height",
+        "time-and-usage-policy:v2.0:video-game-time:daily-allowance",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:adjusting-for-training-intensity",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:general-guidance",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split",
+        "health-and-wellness-policy:v1.0:support-resources",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:daily-allowance",
+        "health-and-wellness-policy:v1.0:purpose",
+        "health-and-wellness-policy:v1.0:acknowledgment",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:leaderboard-mechanics"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:daily-limit"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:daily-limit",
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:monitoring-and-tapering",
+        "health-and-wellness-policy:v1.0:protein-intake-guidelines:recommended-intake-by-body-weight-and-height",
+        "health-and-wellness-policy:v1.0:support-resources",
+        "health-and-wellness-policy:v1.0:purpose"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:daily-limit"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "health-and-wellness-policy:v1.0:caffeine-guidelines:daily-limit",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "5. Caffeine Guidelines > 5.1 Daily Limit",
+          "change_status": "",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.85157084
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:caffeine-guidelines:monitoring-and-tapering",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "5. Caffeine Guidelines > 5.2 Monitoring and Tapering",
+          "change_status": "",
+          "dense_rank": 2,
+          "sparse_rank": 2,
+          "rerank_score": 0.444059
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:protein-intake-guidelines:recommended-intake-by-body-weight-and-height",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "4. Protein Intake Guidelines > 4.2 Recommended Intake by Body Weight and Height",
+          "change_status": "",
+          "dense_rank": 3,
+          "sparse_rank": 3,
+          "rerank_score": 0.1426019
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:support-resources",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "6. Support Resources",
+          "change_status": "",
+          "dense_rank": 8,
+          "sparse_rank": 8,
+          "rerank_score": 0.08829236
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:purpose",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "1. Purpose",
+          "change_status": "",
+          "dense_rank": 10,
+          "sparse_rank": 7,
+          "rerank_score": 0.057647057
+        }
+      ],
+      "answer": "You can consume up to 400 mg of caffeine per day, which is roughly equivalent to four 8-ounce cups of brewed coffee. This is a wellness recommendation, and while managers may check in if they observe signs of overconsumption, it's not strictly enforced. The policy does not address how this limit might vary based on individual factors like body weight or medical conditions.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.577,
+        "retrieve": 1.125,
+        "rerank": 0.145,
+        "generate": 16.287,
+        "total": 20.134
+      }
+    },
+    {
+      "id": "dog-adoption-leave",
+      "query": "How many paid days off do I get if I adopt a dog?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "hr-policy:v2.0:pet-adoption-leave:leave-entitlement"
+      ],
+      "require_all_gold": true,
+      "union_count": 18,
+      "union_ids": [
+        "hr-policy:v2.0:pet-adoption-leave:leave-entitlement",
+        "hr-policy:v2.0:pet-adoption-leave:conditions",
+        "health-and-wellness-policy:v1.0:support-resources",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:exceptions",
+        "health-and-wellness-policy:v1.0:scope",
+        "time-and-usage-policy:v2.0:video-game-time:daily-allowance",
+        "hr-policy:v2.0:acknowledgment",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process",
+        "hr-policy:v2.0:shared-refrigerator-policy:weekend-abandonment-consequence",
+        "hr-policy:v2.0:purpose",
+        "preparedness-policy:v2.0:purpose",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location",
+        "hr-policy:v2.0:shared-refrigerator-policy:cake-sharing-default",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+        "preparedness-policy:v2.0:world-war-3-protocol:operating-posture"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "hr-policy:v2.0:pet-adoption-leave:leave-entitlement"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "hr-policy:v2.0:pet-adoption-leave:leave-entitlement",
+        "hr-policy:v2.0:pet-adoption-leave:conditions",
+        "hr-policy:v2.0:purpose",
+        "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "hr-policy:v2.0:pet-adoption-leave:leave-entitlement"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "hr-policy:v2.0:pet-adoption-leave:leave-entitlement",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "5. Pet Adoption Leave > 5.1 Leave Entitlement",
+          "change_status": "added",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.89166987
+        },
+        {
+          "id": "hr-policy:v2.0:pet-adoption-leave:conditions",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "5. Pet Adoption Leave > 5.2 Conditions",
+          "change_status": "added",
+          "dense_rank": 2,
+          "sparse_rank": null,
+          "rerank_score": 0.53385985
+        },
+        {
+          "id": "hr-policy:v2.0:purpose",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "1. Purpose",
+          "change_status": "added",
+          "dense_rank": 10,
+          "sparse_rank": null,
+          "rerank_score": 0.033264585
+        },
+        {
+          "id": "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "6. World War 3 Protocol > 6.2 Employee Expectations",
+          "change_status": "added",
+          "dense_rank": null,
+          "sparse_rank": 8,
+          "rerank_score": 0.02792528
+        },
+        {
+          "id": "health-and-wellness-policy:v1.0:gym-routine-requirements:suggested-weekly-split",
+          "policy_id": "health-and-wellness-policy",
+          "version": "1.0",
+          "section": "3. Gym Routine Requirements > 3.2 Suggested Weekly Split",
+          "change_status": "",
+          "dense_rank": null,
+          "sparse_rank": 6,
+          "rerank_score": 0.019406376
+        }
+      ],
+      "answer": "You can take 7 paid days off if you adopt a dog. This leave is available once per calendar year and requires informal notice to your manager, ideally with a photo for the company chat. You can take the time off all at once or split it up during the first month after adoption.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.09,
+        "retrieve": 1.142,
+        "rerank": 0.213,
+        "generate": 12.287,
+        "total": 15.732
+      }
+    },
+    {
+      "id": "email-joke",
+      "query": "Do company emails have to include a joke?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "hr-policy:v2.0:email-tone-requirement:requirement"
+      ],
+      "require_all_gold": true,
+      "union_count": 15,
+      "union_ids": [
+        "hr-policy:v2.0:email-tone-requirement:requirement",
+        "hr-policy:v2.0:email-tone-requirement:monitoring",
+        "hr-policy:v2.0:scope",
+        "hr-policy:v2.0:enforcement-and-culture",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "hr-policy:v2.0:boss-error-grace-period",
+        "health-and-wellness-policy:v1.0:scope",
+        "hr-policy:v2.0:dress-code:permitted-attire",
+        "health-and-wellness-policy:v1.0:purpose",
+        "hr-policy:v2.0:shared-refrigerator-policy:cake-sharing-default",
+        "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+        "hr-policy:v2.0:shared-refrigerator-policy:ownership",
+        "health-and-wellness-policy:v1.0:gym-routine-requirements:minimum-requirement",
+        "preparedness-policy:v2.0:general-preparedness-expectations-and-restocking:centralized-restocking"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "hr-policy:v2.0:email-tone-requirement:requirement"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "hr-policy:v2.0:email-tone-requirement:requirement",
+        "hr-policy:v2.0:email-tone-requirement:monitoring",
+        "hr-policy:v2.0:scope",
+        "hr-policy:v2.0:enforcement-and-culture",
+        "hr-policy:v2.0:boss-error-grace-period"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "hr-policy:v2.0:email-tone-requirement:requirement"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "hr-policy:v2.0:email-tone-requirement:requirement",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "3. Email Tone Requirement > 3.1 Requirement",
+          "change_status": "added",
+          "dense_rank": 1,
+          "sparse_rank": 2,
+          "rerank_score": 0.923268
+        },
+        {
+          "id": "hr-policy:v2.0:email-tone-requirement:monitoring",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "3. Email Tone Requirement > 3.2 Monitoring",
+          "change_status": "added",
+          "dense_rank": 2,
+          "sparse_rank": 1,
+          "rerank_score": 0.82288796
+        },
+        {
+          "id": "hr-policy:v2.0:scope",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "2. Scope",
+          "change_status": "unchanged",
+          "dense_rank": 3,
+          "sparse_rank": 7,
+          "rerank_score": 0.60077465
+        },
+        {
+          "id": "hr-policy:v2.0:enforcement-and-culture",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "8. Enforcement and Culture",
+          "change_status": "added",
+          "dense_rank": 4,
+          "sparse_rank": 6,
+          "rerank_score": 0.41563448
+        },
+        {
+          "id": "hr-policy:v2.0:boss-error-grace-period",
+          "policy_id": "hr-policy",
+          "version": "2.0",
+          "section": "6. Boss Error Grace Period",
+          "change_status": "added",
+          "dense_rank": 6,
+          "sparse_rank": 5,
+          "rerank_score": 0.2546183
+        }
+      ],
+      "answer": "You must begin or end every company email with a joke. The joke must be work-appropriate, mildly absurd, or a pun, but it can\u2019t be mean-spirited, target a coworker, or be repeated too often by the same person. A dashboard tracks whether jokes are included, and HR will follow up if you miss this requirement.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.25,
+        "retrieve": 1.127,
+        "rerank": 0.143,
+        "generate": 13.301,
+        "total": 16.821
+      }
+    },
+    {
+      "id": "foosball-winner-tokens",
+      "query": "What is the winner-takes-tokens foosball rule?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule"
+      ],
+      "require_all_gold": true,
+      "union_count": 14,
+      "union_ids": [
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "time-and-usage-policy:v2.0:enforcement:prohibited-transfers",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:daily-allowance",
+        "time-and-usage-policy:v2.0:foosball-monitoring",
+        "time-and-usage-policy:v2.0:enforcement:escalation",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process",
+        "time-and-usage-policy:v2.0:token-depletion-consequences",
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:leaderboard-mechanics",
+        "time-and-usage-policy:v2.0:acknowledgment",
+        "time-and-usage-policy:v2.0:video-game-time:suspension-conditions",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:cto-discretion",
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount",
+        "health-and-wellness-policy:v1.0:purpose"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+        "time-and-usage-policy:v2.0:enforcement:prohibited-transfers",
+        "time-and-usage-policy:v2.0:enforcement:escalation",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "4. Foosball Time and the Winner-Takes-Tokens Rule > 4.2 Winner-Takes-Tokens Rule",
+          "change_status": "added",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.740494
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "6. Token Allocation > 6.2 No Rollover",
+          "change_status": "added",
+          "dense_rank": 3,
+          "sparse_rank": 9,
+          "rerank_score": 0.44956237
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:enforcement:prohibited-transfers",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "9. Enforcement > 9.1 Prohibited Transfers",
+          "change_status": "added",
+          "dense_rank": 2,
+          "sparse_rank": null,
+          "rerank_score": 0.37339646
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:enforcement:escalation",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "9. Enforcement > 9.2 Escalation",
+          "change_status": "added",
+          "dense_rank": 6,
+          "sparse_rank": null,
+          "rerank_score": 0.24772386
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "7. Requesting Additional Tokens > 7.1 Request Process",
+          "change_status": "added",
+          "dense_rank": 7,
+          "sparse_rank": 3,
+          "rerank_score": 0.22635621
+        }
+      ],
+      "answer": "If you defeat a coworker in a foosball match, you receive the loser's remaining token balance for the current cycle. This transfer happens automatically, immediately, and cannot be changed.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.299,
+        "retrieve": 1.147,
+        "rerank": 0.147,
+        "generate": 10.103,
+        "total": 13.695
+      }
+    },
+    {
+      "id": "token-allocation-current",
+      "query": "How many tokens do I get at the start of each six-hour cycle?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount"
+      ],
+      "require_all_gold": true,
+      "union_count": 13,
+      "union_ids": [
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+        "time-and-usage-policy:v2.0:token-depletion-consequences",
+        "time-and-usage-policy:v2.0:enforcement:prohibited-transfers",
+        "time-and-usage-policy:v2.0:enforcement:escalation",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:daily-allowance",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:cto-discretion",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "time-and-usage-policy:v2.0:purpose",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location",
+        "hr-policy:v2.0:shared-refrigerator-policy:cake-sharing-default",
+        "preparedness-policy:v2.0:purpose"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "time-and-usage-policy:v2.0:token-depletion-consequences"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "time-and-usage-policy:v2.0:token-allocation:allocation-amount",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "6. Token Allocation > 6.1 Allocation Amount",
+          "change_status": "added",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.9245858
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "7. Requesting Additional Tokens > 7.1 Request Process",
+          "change_status": "added",
+          "dense_rank": 2,
+          "sparse_rank": 2,
+          "rerank_score": 0.29545903
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "6. Token Allocation > 6.2 No Rollover",
+          "change_status": "added",
+          "dense_rank": 3,
+          "sparse_rank": 3,
+          "rerank_score": 0.17233925
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "4. Foosball Time and the Winner-Takes-Tokens Rule > 4.2 Winner-Takes-Tokens Rule",
+          "change_status": "added",
+          "dense_rank": 9,
+          "sparse_rank": 5,
+          "rerank_score": 0.10328664
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:token-depletion-consequences",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "8. Token Depletion \u2014 Consequences",
+          "change_status": "added",
+          "dense_rank": 4,
+          "sparse_rank": 6,
+          "rerank_score": 0.09633978
+        }
+      ],
+      "answer": "You get 500,000 tokens at the start of each six-hour cycle. This is a reduction from the 1,000,000 that were previously issued.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.25,
+        "retrieve": 1.13,
+        "rerank": 0.135,
+        "generate": 14.566,
+        "total": 18.082
+      }
+    },
+    {
+      "id": "token-allocation-history",
+      "query": "What changed for token allocation compared to the old version?",
+      "expected_lane": "history",
+      "lane": "history",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "time-and-usage-policy:v1.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount"
+      ],
+      "require_all_gold": true,
+      "union_count": 15,
+      "union_ids": [
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v1.0:token-allocation:no-rollover",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:cto-discretion",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+        "time-and-usage-policy:v1.0:enforcement:prohibited-transfers",
+        "time-and-usage-policy:v2.0:purpose",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "time-and-usage-policy:v1.0:requesting-additional-tokens:cto-discretion",
+        "time-and-usage-policy:v1.0:requesting-additional-tokens:request-process",
+        "time-and-usage-policy:v1.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:request-process",
+        "preparedness-policy:v2.0:world-war-3-protocol:operating-posture",
+        "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:duration-and-exceptions",
+        "preparedness-policy:v2.0:ai-apocalypse-protocol-new-in-version-2-0:conduct-during-the-crisis",
+        "time-and-usage-policy:v2.0:enforcement:escalation"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "time-and-usage-policy:v1.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "preparedness-policy:v2.0:world-war-3-protocol:operating-posture",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount",
+        "time-and-usage-policy:v2.0:purpose",
+        "time-and-usage-policy:v2.0:token-allocation:no-rollover"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "time-and-usage-policy:v2.0:token-allocation:allocation-amount"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "preparedness-policy:v2.0:world-war-3-protocol:operating-posture",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "6. World War 3 Protocol > 6.1 Operating Posture",
+          "change_status": "added",
+          "dense_rank": null,
+          "sparse_rank": 6,
+          "rerank_score": 0.81025416
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "4. Foosball Time and the Winner-Takes-Tokens Rule > 4.2 Winner-Takes-Tokens Rule",
+          "change_status": "added",
+          "dense_rank": 7,
+          "sparse_rank": null,
+          "rerank_score": 0.7898345
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:token-allocation:allocation-amount",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "6. Token Allocation > 6.1 Allocation Amount",
+          "change_status": "added",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.6506676
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:purpose",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "1. Purpose",
+          "change_status": "added",
+          "dense_rank": 6,
+          "sparse_rank": null,
+          "rerank_score": 0.55796635
+        },
+        {
+          "id": "time-and-usage-policy:v2.0:token-allocation:no-rollover",
+          "policy_id": "time-and-usage-policy",
+          "version": "2.0",
+          "section": "6. Token Allocation > 6.2 No Rollover",
+          "change_status": "added",
+          "dense_rank": 4,
+          "sparse_rank": 3,
+          "rerank_score": 0.3701121
+        }
+      ],
+      "answer": "Previously, you received 1,000,000 tokens at the start of each cycle. Now, you receive 500,000 tokens. Also, a new rule allows the winner of a foosball match to receive the loser\u2019s remaining tokens.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.461,
+        "retrieve": 1.183,
+        "rerank": 0.625,
+        "generate": 13.321,
+        "total": 17.59
+      }
+    },
+    {
+      "id": "hazmat-suit",
+      "query": "How can I get a hazmat suit during a nuclear event?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:equipment-eligibility"
+      ],
+      "require_all_gold": false,
+      "union_count": 14,
+      "union_ids": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+        "preparedness-policy:v2.0:purpose",
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:equipment-eligibility",
+        "preparedness-policy:v2.0:zombie-apocalypse-protocol:standard-procedure",
+        "preparedness-policy:v2.0:communication-during-a-crisis",
+        "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+        "preparedness-policy:v2.0:general-preparedness-expectations-and-restocking:centralized-restocking",
+        "preparedness-policy:v2.0:ai-apocalypse-protocol-new-in-version-2-0:conduct-during-the-crisis",
+        "hr-policy:v2.0:shared-refrigerator-policy:cake-sharing-default",
+        "hr-policy:v2.0:enforcement-and-culture",
+        "health-and-wellness-policy:v1.0:caffeine-guidelines:monitoring-and-tapering",
+        "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:shelter-location"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:equipment-eligibility"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:equipment-eligibility",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "preparedness-policy:v2.0:general-preparedness-expectations-and-restocking:centralized-restocking",
+        "preparedness-policy:v2.0:purpose"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:equipment-eligibility"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "preparedness-policy:v2.0:foosball-leaderboard-and-emergency-equipment-eligibility:equipment-eligibility",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "8. Foosball Leaderboard & Emergency Equipment Eligibility > 8.2 Equipment Eligibility",
+          "change_status": "added",
+          "dense_rank": 5,
+          "sparse_rank": null,
+          "rerank_score": 0.15552714
+        },
+        {
+          "id": "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "4. Nuclear Apocalypse Protocol \u2014 Updated > 4.3 Duration of Sheltering",
+          "change_status": "added",
+          "dense_rank": 3,
+          "sparse_rank": 3,
+          "rerank_score": 0.13408302
+        },
+        {
+          "id": "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "4. Nuclear Apocalypse Protocol \u2014 Updated > 4.2 Hazmat Suit Eligibility",
+          "change_status": "added",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.08146875
+        },
+        {
+          "id": "preparedness-policy:v2.0:general-preparedness-expectations-and-restocking:centralized-restocking",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "9. General Preparedness Expectations and Restocking > 9.2 Centralized Restocking",
+          "change_status": "added",
+          "dense_rank": 9,
+          "sparse_rank": null,
+          "rerank_score": 0.07802913
+        },
+        {
+          "id": "preparedness-policy:v2.0:purpose",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "1. Purpose",
+          "change_status": "added",
+          "dense_rank": 4,
+          "sparse_rank": 4,
+          "rerank_score": 0.050691362
+        }
+      ],
+      "answer": "You can get a hazmat suit if you are one of the top 10 employees on the quarterly Foosball Leaderboard. Otherwise, you must shelter in place without one. The policy covers nuclear events and determines equipment access based on your leaderboard standing.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.279,
+        "retrieve": 1.139,
+        "rerank": 0.152,
+        "generate": 11.382,
+        "total": 14.951
+      }
+    },
+    {
+      "id": "nuclear-shelter",
+      "query": "Where should I shelter if there is a nuclear detonation?",
+      "expected_lane": "current",
+      "lane": "current",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location"
+      ],
+      "require_all_gold": true,
+      "union_count": 14,
+      "union_ids": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+        "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:shelter-location",
+        "preparedness-policy:v2.0:purpose",
+        "preparedness-policy:v2.0:communication-during-a-crisis",
+        "preparedness-policy:v2.0:zombie-apocalypse-protocol:standard-procedure",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:hazmat-suit-eligibility",
+        "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+        "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:duration-and-exceptions",
+        "preparedness-policy:v2.0:ai-apocalypse-protocol-new-in-version-2-0:conduct-during-the-crisis",
+        "hr-policy:v2.0:pet-adoption-leave:leave-entitlement",
+        "time-and-usage-policy:v2.0:requesting-additional-tokens:cto-discretion",
+        "time-and-usage-policy:v2.0:foosball-time-and-the-winner-takes-tokens-rule:winner-takes-tokens-rule",
+        "hr-policy:v2.0:boss-error-grace-period"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+        "preparedness-policy:v2.0:purpose",
+        "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:duration-and-exceptions",
+        "preparedness-policy:v2.0:zombie-apocalypse-protocol:standard-procedure"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "4. Nuclear Apocalypse Protocol \u2014 Updated > 4.1 Shelter Location",
+          "change_status": "added",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.83742094
+        },
+        {
+          "id": "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "4. Nuclear Apocalypse Protocol \u2014 Updated > 4.3 Duration of Sheltering",
+          "change_status": "added",
+          "dense_rank": 2,
+          "sparse_rank": 5,
+          "rerank_score": 0.43223172
+        },
+        {
+          "id": "preparedness-policy:v2.0:purpose",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "1. Purpose",
+          "change_status": "added",
+          "dense_rank": 4,
+          "sparse_rank": 3,
+          "rerank_score": 0.3433643
+        },
+        {
+          "id": "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:duration-and-exceptions",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "5. Earthquake Protocol \u2014 New in Version 2.0 > 5.2 Duration and Exceptions",
+          "change_status": "added",
+          "dense_rank": 9,
+          "sparse_rank": null,
+          "rerank_score": 0.19178173
+        },
+        {
+          "id": "preparedness-policy:v2.0:zombie-apocalypse-protocol:standard-procedure",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "3. Zombie Apocalypse Protocol > 3.1 Standard Procedure",
+          "change_status": "added",
+          "dense_rank": 6,
+          "sparse_rank": null,
+          "rerank_score": 0.0899092
+        }
+      ],
+      "answer": "You should get into the break room and climb into the industrial refrigerator if there is a nuclear detonation. Prop the door slightly ajar for airflow. You must remain indoors for a minimum of two weeks following the event, with exceptions only for verified emergency personnel and scheduled supply runs.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.362,
+        "retrieve": 1.162,
+        "rerank": 0.153,
+        "generate": 11.312,
+        "total": 14.99
+      }
+    },
+    {
+      "id": "nuclear-history-wait",
+      "query": "What did the old nuclear policy say about when we could go outside after a blast?",
+      "expected_lane": "history",
+      "lane": "history",
+      "router_source": "llm",
+      "gold_chunk_ids": [
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:all-clear-timing"
+      ],
+      "require_all_gold": true,
+      "union_count": 14,
+      "union_ids": [
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:all-clear-timing",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:shelter-position",
+        "preparedness-policy:v2.0:earthquake-protocol-new-in-version-2-0:duration-and-exceptions",
+        "preparedness-policy:v1.0:world-war-3-protocol:employee-expectations",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:shelter-location",
+        "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
+        "preparedness-policy:v2.0:purpose",
+        "time-and-usage-policy:v1.0:acknowledgment",
+        "preparedness-policy:v1.0:purpose",
+        "hr-policy:v2.0:boss-error-grace-period",
+        "hr-policy:v2.0:shared-refrigerator-policy:cake-sharing-default",
+        "hr-policy:v1.0:boss-error-grace-period",
+        "time-and-usage-policy:v2.0:purpose"
+      ],
+      "union_recall": true,
+      "union_found": [
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:all-clear-timing"
+      ],
+      "rerank_count": 5,
+      "rerank_ids": [
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:all-clear-timing",
+        "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:shelter-position",
+        "preparedness-policy:v2.0:purpose",
+        "preparedness-policy:v1.0:purpose"
+      ],
+      "rerank_recall": true,
+      "rerank_found": [
+        "preparedness-policy:v1.0:nuclear-apocalypse-protocol:all-clear-timing"
+      ],
+      "rerank_error": null,
+      "reranked_chunks": [
+        {
+          "id": "preparedness-policy:v1.0:nuclear-apocalypse-protocol:all-clear-timing",
+          "policy_id": "preparedness-policy",
+          "version": "1.0",
+          "section": "4. Nuclear Apocalypse Protocol > 4.2 All-Clear Timing",
+          "change_status": "stale",
+          "dense_rank": 1,
+          "sparse_rank": 1,
+          "rerank_score": 0.72884524
+        },
+        {
+          "id": "preparedness-policy:v2.0:nuclear-apocalypse-protocol-updated:duration-of-sheltering",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "4. Nuclear Apocalypse Protocol \u2014 Updated > 4.3 Duration of Sheltering",
+          "change_status": "added",
+          "dense_rank": 2,
+          "sparse_rank": 4,
+          "rerank_score": 0.5101799
+        },
+        {
+          "id": "preparedness-policy:v1.0:nuclear-apocalypse-protocol:shelter-position",
+          "policy_id": "preparedness-policy",
+          "version": "1.0",
+          "section": "4. Nuclear Apocalypse Protocol > 4.1 Shelter Position",
+          "change_status": "stale",
+          "dense_rank": 3,
+          "sparse_rank": 3,
+          "rerank_score": 0.4851368
+        },
+        {
+          "id": "preparedness-policy:v2.0:purpose",
+          "policy_id": "preparedness-policy",
+          "version": "2.0",
+          "section": "1. Purpose",
+          "change_status": "added",
+          "dense_rank": 8,
+          "sparse_rank": 2,
+          "rerank_score": 0.35958952
+        },
+        {
+          "id": "preparedness-policy:v1.0:purpose",
+          "policy_id": "preparedness-policy",
+          "version": "1.0",
+          "section": "1. Purpose",
+          "change_status": "stale",
+          "dense_rank": 10,
+          "sparse_rank": 6,
+          "rerank_score": 0.17326054
+        }
+      ],
+      "answer": "Previously, you could go outside after a two-hour waiting period following a nuclear blast, assuming radiation levels had returned to acceptable levels. Now, you must remain indoors, away from windows, for a minimum of two weeks following any nuclear event. Venturing outside before the two-week mark is prohibited except for verified emergency personnel.",
+      "answer_ok": true,
+      "answer_missing_groups": [],
+      "answer_error": null,
+      "latency_s": {
+        "route": 2.369,
+        "retrieve": 1.141,
+        "rerank": 0.148,
+        "generate": 12.597,
+        "total": 16.255
+      }
+    }
+  ]
+}

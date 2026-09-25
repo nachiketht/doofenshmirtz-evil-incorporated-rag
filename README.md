@@ -101,7 +101,7 @@ Gold questions live in `[evaluation_harness/gold_set.json](evaluation_harness/go
 python -m pytest tests/test_eval.py -v --tb=short
 ```
 
-Writes `[evaluation_harness/eval_report.md](evaluation_harness/eval_report.md)` and `storage/eval_results.json`.
+Writes `[results/eval_report.md](results/eval_report.md)` and `[results/eval_results.json](results/eval_results.json)`.
 
 Offline unit tests (no Chroma / Ollama / Cohere):
 
@@ -131,7 +131,8 @@ mypy
 | `src/generation/`     | Prompt, JSON schema, CLI                |
 | `src/adapter/`        | Ollama embed/chat, Cohere, Chroma       |
 | `src/utility/`        | Debug CLIs                              |
-| `evaluation_harness/` | Gold set, scoring, report               |
+| `evaluation_harness/` | Gold set and scoring                    |
+| `results/`            | Eval JSON and markdown report           |
 | `tests/`              | Unit tests and live eval pytest         |
 
 

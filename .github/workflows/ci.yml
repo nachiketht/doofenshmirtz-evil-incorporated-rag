@@ -57,7 +57,7 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          data = json.loads(Path("storage/eval_results.json").read_text())
+          data = json.loads(Path("results/eval_results.json").read_text())
           totals = data["summary"]
           recall = totals["retrieval_recall"]["score"]
           accuracy = totals["answer_accuracy"]["score"]

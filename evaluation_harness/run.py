@@ -6,7 +6,6 @@ import json
 import sys
 import time
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -22,8 +21,9 @@ from retrieval.rerank import rerank_hits
 from retrieval.route import route
 from settings import REPO_ROOT, RerankSettings
 
-RESULTS_PATH = REPO_ROOT / "storage" / "eval_results.json"
-REPORT_PATH = Path(__file__).with_name("eval_report.md")
+RESULTS_DIR = REPO_ROOT / "results"
+RESULTS_PATH = RESULTS_DIR / "eval_results.json"
+REPORT_PATH = RESULTS_DIR / "eval_report.md"
 
 
 def chroma_ready() -> bool:
@@ -186,7 +186,7 @@ def run_eval(gold_cases: list[dict]) -> dict[str, dict]:
         }
 
     summary = _summary(rows)
-    RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     RESULTS_PATH.write_text(
         json.dumps({"summary": summary, "cases": list(rows.values())}, indent=2),
         encoding="utf-8",
