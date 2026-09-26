@@ -16,3 +16,4 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+minimal_loop/.chroma/

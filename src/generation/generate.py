@@ -18,6 +18,7 @@ def generate_answer(
     hits: list[FusedHit],
     *,
     llm: TextChatClient | None = None,
+    naive: bool = False,
 ) -> str:
     if not hits:
         return "No policy excerpts were retrieved for this question."
@@ -28,7 +29,8 @@ def generate_answer(
             base_url=settings.ollama_base_url,
             timeout=settings.timeout,
         )
-    return llm.complete(_prompt(query, hits))
+    prompt = _naive_prompt(query, hits) if naive else _prompt(query, hits)
+    return llm.complete(prompt)
 
 
 def citations_for(hits: list[FusedHit]) -> list[dict]:
@@ -76,6 +78,26 @@ def _prompt(query: str, hits: list[FusedHit]) -> str:
         "files, excerpt labels, or the words 'in force' / 'superseded'. A sources "
         "list is attached separately. Do not refer to 'the excerpts' in the "
         "answer itself.\n\n"
+        f"Question: {query.strip()}\n\n"
+        f"Excerpts:\n{excerpts}\n\n"
+        "Answer:\n"
+    )
+
+
+def _naive_prompt(query: str, hits: list[FusedHit]) -> str:
+    """Pre-router prompt: unlabeled excerpts, no version preference."""
+    excerpts = "\n\n".join(
+        f"Excerpt {index}:\n{_leaf_body(hit.text)}"
+        for index, hit in enumerate(hits, start=1)
+    )
+    return (
+        "You are a policy assistant. Answer using ONLY the excerpts below. "
+        "Treat every excerpt as current policy. There is no newer or older version.\n\n"
+        "If two excerpts give different rules for the same question, you MUST "
+        "report both rules and say they conflict. Do not pick one. Do not prefer "
+        "a later excerpt. Do not reconcile them into a single number or wait time.\n\n"
+        "Plain language, second person. A few sentences. Do not mention excerpt "
+        "numbers, policy names, or section titles.\n\n"
         f"Question: {query.strip()}\n\n"
         f"Excerpts:\n{excerpts}\n\n"
         "Answer:\n"

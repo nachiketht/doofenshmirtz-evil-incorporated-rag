@@ -49,6 +49,31 @@ def test_generate_answer_uses_provided_llm() -> None:
     )
 
 
+def test_naive_prompt_omits_version_labels_and_requires_conflict() -> None:
+    class _Stub:
+        def complete(self, prompt: str) -> str:
+            assert "version 1.0" not in prompt
+            assert "in force" not in prompt
+            assert "superseded" not in prompt
+            assert "MUST report both rules" in prompt
+            assert "two hours" in prompt
+            assert "two weeks" in prompt
+            return "The rules conflict."
+
+    v1 = _hit(
+        text="Preparedness v1.0 — 4.2\nYou may go outside after two hours.",
+        metadata={"version": "1.0", "change_status": "stale"},
+    )
+    v2 = _hit(
+        id="prep:v2",
+        text="Preparedness v2.0 — 4.3\nRemain indoors for two weeks.",
+        metadata={"version": "2.0", "change_status": "added"},
+    )
+    assert generate_answer("when outside?", [v1, v2], llm=_Stub(), naive=True) == (
+        "The rules conflict."
+    )
+
+
 def test_build_generation_response_maps_chunks_and_router() -> None:
     payload = build_generation_response(
         " You can. ", [_hit()], RouteDecision(lane="current", source="llm")

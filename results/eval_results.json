@@ -27,34 +27,34 @@
     },
     "latency": {
       "route": {
-        "mean": 2.397,
-        "total": 26.366,
+        "mean": 2.315,
+        "total": 25.462,
         "n": 11,
-        "display": "mean 2.40s  total 26.37s"
+        "display": "mean 2.31s  total 25.46s"
       },
       "retrieve": {
-        "mean": 1.168,
-        "total": 12.85,
+        "mean": 1.12,
+        "total": 12.318,
         "n": 11,
-        "display": "mean 1.17s  total 12.85s"
+        "display": "mean 1.12s  total 12.32s"
       },
       "rerank": {
-        "mean": 0.2,
-        "total": 2.196,
+        "mean": 0.236,
+        "total": 2.596,
         "n": 11,
-        "display": "mean 0.20s  total 2.20s"
+        "display": "mean 0.24s  total 2.60s"
       },
       "generate": {
-        "mean": 13.235,
-        "total": 145.588,
+        "mean": 14.036,
+        "total": 154.394,
         "n": 11,
-        "display": "mean 13.24s  total 145.59s"
+        "display": "mean 14.04s  total 154.39s"
       },
       "total": {
-        "mean": 17.0,
-        "total": 187.001,
+        "mean": 17.707,
+        "total": 194.774,
         "n": 11,
-        "display": "mean 17.00s  total 187.00s"
+        "display": "mean 17.71s  total 194.77s"
       }
     }
   },
@@ -159,16 +159,16 @@
           "rerank_score": 0.08459118
         }
       ],
-      "answer": "You are expected to complete a minimum of three structured training sessions per week, and each session should be at least 45 minutes long. A suggested schedule is two resistance-training days and one cardio or conditioning day, with at least one full rest day. The excerpts do not specify an upper limit on the number of gym sessions or the length of each session.",
+      "answer": "You are expected to complete a minimum of three structured training sessions per week, with each session lasting at least 45 minutes. These sessions should include a mix of resistance training and cardiovascular conditioning. A suggested schedule is two days of resistance training, one cardio or conditioning day, and at least one full rest day, but this is just a suggestion.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.926,
-        "retrieve": 1.404,
-        "rerank": 0.19,
-        "generate": 20.358,
-        "total": 24.878
+        "route": 1.96,
+        "retrieve": 1.135,
+        "rerank": 0.168,
+        "generate": 20.707,
+        "total": 23.97
       }
     },
     {
@@ -267,16 +267,16 @@
           "rerank_score": 0.079217605
         }
       ],
-      "answer": "You are exempt from the gym attendance minimum. However, you are strongly encouraged to participate anyway.",
+      "answer": "You are exempt from the gym-attendance minimum. However, you are strongly encouraged to participate anyway. This policy applies to all employees, including interns.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.503,
-        "retrieve": 1.15,
-        "rerank": 0.145,
-        "generate": 10.074,
-        "total": 13.873
+        "route": 2.649,
+        "retrieve": 1.157,
+        "rerank": 0.234,
+        "generate": 11.076,
+        "total": 15.116
       }
     },
     {
@@ -374,16 +374,16 @@
           "rerank_score": 0.057647057
         }
       ],
-      "answer": "You can consume up to 400 mg of caffeine per day, which is roughly equivalent to four 8-ounce cups of brewed coffee. This is a wellness recommendation, and while managers may check in if they observe signs of overconsumption, it's not strictly enforced. The policy does not address how this limit might vary based on individual factors like body weight or medical conditions.",
+      "answer": "You can consume up to 400 mg of caffeine per day, which is roughly equivalent to four 8-ounce cups of brewed coffee. This is a wellness recommendation, and while managers may check in if they notice signs of overconsumption, it isn't strictly enforced. The policy does not address how this limit may vary based on individual factors like age or medical conditions.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.577,
-        "retrieve": 1.125,
-        "rerank": 0.145,
-        "generate": 16.287,
-        "total": 20.134
+        "route": 2.236,
+        "retrieve": 1.146,
+        "rerank": 0.142,
+        "generate": 15.114,
+        "total": 18.639
       }
     },
     {
@@ -453,7 +453,7 @@
           "change_status": "added",
           "dense_rank": 2,
           "sparse_rank": null,
-          "rerank_score": 0.53385985
+          "rerank_score": 0.53400564
         },
         {
           "id": "hr-policy:v2.0:purpose",
@@ -463,7 +463,7 @@
           "change_status": "added",
           "dense_rank": 10,
           "sparse_rank": null,
-          "rerank_score": 0.033264585
+          "rerank_score": 0.033226922
         },
         {
           "id": "preparedness-policy:v2.0:world-war-3-protocol:employee-expectations",
@@ -486,16 +486,16 @@
           "rerank_score": 0.019406376
         }
       ],
-      "answer": "You can take 7 paid days off if you adopt a dog. This leave is available once per calendar year and requires informal notice to your manager, ideally with a photo for the company chat. You can take the time off all at once or split it up during the first month after adoption.",
+      "answer": "You can take 7 paid days off if you adopt a dog. This leave is available once per calendar year and requires only informal notice to your manager, and ideally a photo for the company chat. You can take the time off in a single block or split it across the first month after adoption.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.09,
-        "retrieve": 1.142,
-        "rerank": 0.213,
-        "generate": 12.287,
-        "total": 15.732
+        "route": 2.274,
+        "retrieve": 1.126,
+        "rerank": 1.03,
+        "generate": 15.709,
+        "total": 20.14
       }
     },
     {
@@ -595,16 +595,16 @@
           "rerank_score": 0.2546183
         }
       ],
-      "answer": "You must begin or end every company email with a joke. The joke must be work-appropriate, mildly absurd, or a pun, but it can\u2019t be mean-spirited, target a coworker, or be repeated too often by the same person. A dashboard tracks whether jokes are included, and HR will follow up if you miss this requirement.",
+      "answer": "Yes, every company email must begin or end with a joke. The joke needs to be work-appropriate, mildly absurd, or a pun, and it can\u2019t be mean-spirited, target a specific coworker, or be repeated too often by the same person. The policy applies to all employees, including managers and executives, and a dashboard tracks whether jokes are included.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.25,
-        "retrieve": 1.127,
-        "rerank": 0.143,
-        "generate": 13.301,
-        "total": 16.821
+        "route": 2.533,
+        "retrieve": 0.891,
+        "rerank": 0.144,
+        "generate": 14.777,
+        "total": 18.345
       }
     },
     {
@@ -703,16 +703,16 @@
           "rerank_score": 0.22635621
         }
       ],
-      "answer": "If you defeat a coworker in a foosball match, you receive the loser's remaining token balance for the current cycle. This transfer happens automatically, immediately, and cannot be changed.",
+      "answer": "If you defeat a coworker in a foosball match, you receive their remaining token balance for the current cycle. This transfer happens automatically and immediately, and you cannot negotiate it. Tokens gained through foosball victories do not count toward your cycle's base allocation.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.299,
-        "retrieve": 1.147,
-        "rerank": 0.147,
-        "generate": 10.103,
-        "total": 13.695
+        "route": 2.026,
+        "retrieve": 1.125,
+        "rerank": 0.149,
+        "generate": 15.325,
+        "total": 18.625
       }
     },
     {
@@ -810,16 +810,16 @@
           "rerank_score": 0.09633978
         }
       ],
-      "answer": "You get 500,000 tokens at the start of each six-hour cycle. This is a reduction from the 1,000,000 that were previously issued.",
+      "answer": "You are issued 500,000 tokens at the start of each six-hour cycle, and these are replenished automatically. Previously, you received 1,000,000 tokens.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.25,
-        "retrieve": 1.13,
-        "rerank": 0.135,
-        "generate": 14.566,
-        "total": 18.082
+        "route": 2.39,
+        "retrieve": 1.157,
+        "rerank": 0.152,
+        "generate": 12.646,
+        "total": 16.345
       }
     },
     {
@@ -921,16 +921,16 @@
           "rerank_score": 0.3701121
         }
       ],
-      "answer": "Previously, you received 1,000,000 tokens at the start of each cycle. Now, you receive 500,000 tokens. Also, a new rule allows the winner of a foosball match to receive the loser\u2019s remaining tokens.",
+      "answer": "Previously, you were issued 1,000,000 tokens at the start of each six-hour cycle. Now, you are issued 500,000 tokens. Additionally, Version 1.0 did not specify that a foosball victory could result in transferring tokens from a defeated coworker.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.461,
-        "retrieve": 1.183,
-        "rerank": 0.625,
-        "generate": 13.321,
-        "total": 17.59
+        "route": 2.342,
+        "retrieve": 1.153,
+        "rerank": 0.14,
+        "generate": 12.593,
+        "total": 16.229
       }
     },
     {
@@ -1032,16 +1032,16 @@
           "rerank_score": 0.050691362
         }
       ],
-      "answer": "You can get a hazmat suit if you are one of the top 10 employees on the quarterly Foosball Leaderboard. Otherwise, you must shelter in place without one. The policy covers nuclear events and determines equipment access based on your leaderboard standing.",
+      "answer": "You can get a hazmat suit if you are in the top 10 on the quarterly Foosball Leaderboard at the time a covered emergency, like a nuclear event, is declared. Otherwise, you must shelter in place without one.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.279,
-        "retrieve": 1.139,
-        "rerank": 0.152,
-        "generate": 11.382,
-        "total": 14.951
+        "route": 2.538,
+        "retrieve": 1.141,
+        "rerank": 0.144,
+        "generate": 13.33,
+        "total": 17.153
       }
     },
     {
@@ -1140,16 +1140,16 @@
           "rerank_score": 0.0899092
         }
       ],
-      "answer": "You should get into the break room and climb into the industrial refrigerator if there is a nuclear detonation. Prop the door slightly ajar for airflow. You must remain indoors for a minimum of two weeks following the event, with exceptions only for verified emergency personnel and scheduled supply runs.",
+      "answer": "If there is a nuclear detonation, you should get into the break room and climb into the industrial refrigerator. Prop the door slightly ajar for airflow. You must remain indoors for a minimum of two weeks following the event, with exceptions only for verified emergency personnel and scheduled supply runs.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.362,
-        "retrieve": 1.162,
+        "route": 2.245,
+        "retrieve": 1.142,
         "rerank": 0.153,
-        "generate": 11.312,
-        "total": 14.99
+        "generate": 11.386,
+        "total": 14.926
       }
     },
     {
@@ -1248,16 +1248,16 @@
           "rerank_score": 0.17326054
         }
       ],
-      "answer": "Previously, you could go outside after a two-hour waiting period following a nuclear blast, assuming radiation levels had returned to acceptable levels. Now, you must remain indoors, away from windows, for a minimum of two weeks following any nuclear event. Venturing outside before the two-week mark is prohibited except for verified emergency personnel.",
+      "answer": "Previously, you could go outside after a two-hour waiting period following a nuclear blast, assuming radiation levels had returned to acceptable levels. Now, you must remain indoors for a minimum of two weeks after any nuclear event, and venturing outside before then is prohibited except for verified emergency personnel.",
       "answer_ok": true,
       "answer_missing_groups": [],
       "answer_error": null,
       "latency_s": {
-        "route": 2.369,
-        "retrieve": 1.141,
-        "rerank": 0.148,
-        "generate": 12.597,
-        "total": 16.255
+        "route": 2.269,
+        "retrieve": 1.145,
+        "rerank": 0.14,
+        "generate": 11.731,
+        "total": 15.286
       }
     }
   ]
