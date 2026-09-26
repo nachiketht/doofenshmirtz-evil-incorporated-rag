@@ -90,7 +90,6 @@ jobs:
         run: |
           ollama pull embeddinggemma:latest
           ollama pull gemma3:4b
-          ollama pull gemma3:12b
         env:
           OLLAMA_HOST: http://127.0.0.1:11434
 
@@ -105,3 +104,4 @@ jobs:
         env:
           OLLAMA_HOST: http://127.0.0.1:11434
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+          GENERATE_MODEL: gemma3:4b
