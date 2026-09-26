@@ -43,6 +43,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check Cohere key
+        env:
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+        run: |
+          if [ -n "$COHERE_API_KEY" ]; then
+            echo "COHERE_API_KEY is set"
+          else
+            echo "COHERE_API_KEY is empty"
+            echo "Add repository secret COHERE_API_KEY on this same repo, then push to this branch."
+            echo "Fork pull_request runs do not receive secrets; use a push on the repo that has the secret."
+            exit 1
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
