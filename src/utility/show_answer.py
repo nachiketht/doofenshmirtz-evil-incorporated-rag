@@ -65,9 +65,7 @@ def main() -> None:
     if args.pre_router:
         hits = [_treat_as_live(hit) for hit in hits]
     citations = citations_for(hits)
-    answer = generate_answer(
-        args.query, hits, llm=_generator(), naive=args.pre_router
-    )
+    answer = generate_answer(args.query, hits, llm=_generator(), naive=args.pre_router)
     payload = {
         "query": args.query,
         "source": decision.source,

@@ -18,7 +18,9 @@ QUERY = "How long should I stay inside after a nuclear event?"
 
 def main() -> None:
     model = SentenceTransformer("all-MiniLM-L6-v2")
-    collection = Client().create_collection("minimal", metadata={"hnsw:space": "cosine"})
+    collection = Client().create_collection(
+        "minimal", metadata={"hnsw:space": "cosine"}
+    )
 
     embedding_a = model.encode(TEXT_A).tolist()
     collection.add(ids=["a"], documents=[TEXT_A], embeddings=[embedding_a])
