@@ -92,8 +92,20 @@ def canonicalize(name: str) -> str:
     return ALIASES.get(name, name)
 
 
+def stem(word: str) -> str:
+    """Tiny plural folding so "passwords" matches "password" in BM25."""
+    if len(word) > 3 and word.endswith("s") and not word.endswith("ss"):
+        return word[:-1]
+    return word
+
+
 def tokens(text: str) -> list[str]:
-    return re.findall(r"[a-z0-9]+", text.lower())
+    return [stem(word) for word in re.findall(r"[a-z0-9]+", text.lower())]
+
+
+def keyword_text(row: dict) -> str:
+    """BM25 sees the heading path too, so "password length" finds "3.1 Length"."""
+    return row.get("embed_text") or f"{row.get('heading_path', '')}\n{row['text']}"
 
 
 def catalog(rows: list[dict]) -> dict:
@@ -430,7 +442,7 @@ def search(queries, vectors, database, where, level, options) -> list[dict]:
     if not rows:
         return []
     with stage("hybrid"):
-        texts = [row.get("embed_text") or row["text"] for row in rows]
+        texts = [keyword_text(row) for row in rows]
         for query in queries:
             keyword = bm25_scores(query, texts)
             order = sorted(range(len(rows)), key=lambda i: (-keyword[i], rows[i]["id"]))
@@ -456,8 +468,23 @@ def finish(question, vector, fused, reranker, options) -> list[dict]:
         )
     if options.mmr and len(ordered) > options.top_n:
         with stage("mmr"):
-            return mmr(ordered, vector, options.top_n, options.mmr_lambda)
+            return mmr(
+                ordered,
+                vector,
+                options.top_n,
+                options.mmr_lambda,
+                relevance=mmr_relevance(ordered),
+            )
     return ordered[: options.top_n]
+
+
+def mmr_relevance(ordered: list[dict]) -> list[float]:
+    """Relevance for MMR: calibrated rerank scores when every item has one,
+    otherwise the reranked position (so MMR never undoes the reranker)."""
+    scores = [item.get("rerank_score") for item in ordered]
+    if all(score is not None for score in scores):
+        return [float(score) for score in scores]
+    return [1.0 / (1 + index) for index in range(len(ordered))]
 
 
 def relevance(hits: list[dict], vector) -> dict:

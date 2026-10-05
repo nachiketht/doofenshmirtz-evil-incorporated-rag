@@ -15,3 +15,4 @@ lab-submission.docx
 .rag/
 feedback.jsonl
 last_answer.json
+results/offline_eval.json
