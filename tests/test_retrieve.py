@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from adpater.database_adapter import DatabaseAdapter
+from adapter.database_adapter import DatabaseAdapter
 from rag.logutil import disable_question_log, enable_question_log, stage
 from rag.retrieve import apply_rerank, bm25_scores, cosine, fuse, main, retrieve
 
@@ -290,54 +290,46 @@ def test_unknown_rerank_text_is_ignored():
 def test_main_prints_the_answer(monkeypatch, capsys):
     seen = {}
 
-    def fake_retrieve(question, embedder, model, database, reranker, n=3):
+    def fake_answer(question, components, options=None):
         seen["question"] = question
-        seen["database"] = database
-        seen["model"] = model
-        seen["reranker"] = reranker
-        return {"kind": "lookup", "hits": [{"text": "cake"}]}
-
-    def fake_adapter(model=None):
-        return model or "generator"
+        seen["components"] = components
+        seen["options"] = options
+        return {
+            "answer": "cake",
+            "trace_id": "abc",
+            "access": "default",
+            "cached": False,
+            "table": "step latency",
+        }
 
     monkeypatch.setattr(sys, "argv", ["retrieve.py", "who gets cake?"])
-    monkeypatch.setattr("rag.retrieve.EmbeddingAdapter", lambda: "embedder")
-    monkeypatch.setattr("rag.retrieve.GenerationAdapter", fake_adapter)
-    monkeypatch.setattr("rag.retrieve.DatabaseAdapter", lambda path: path)
-    monkeypatch.setattr("rag.retrieve.RerankerAdapter", lambda: "reranker")
-    monkeypatch.setattr("rag.retrieve.retrieve", fake_retrieve)
-    monkeypatch.setattr(
-        "rag.retrieve.generate",
-        lambda question, kind, hits, model: "cake" if model == "generator" else "",
-    )
+    monkeypatch.setattr("rag.pipeline.build_components", lambda path: path or "chroma")
+    monkeypatch.setattr("rag.pipeline.answer", fake_answer)
     assert main() == 0
     assert capsys.readouterr().out.strip() == "cake"
     assert main(trace=True) == 0
     traced = capsys.readouterr().out.splitlines()
-    assert traced[:-1] == ["cake"]
+    assert traced[0] == "cake"
+    assert "trace abc access=default cached=no" in traced
+    assert "step latency" in traced
     assert traced[-1].startswith("latency: ")
     assert traced[-1].endswith("s")
     assert seen["question"] == "who gets cake?"
-    assert seen["database"] == "chroma"
-    assert seen["model"] == "gemma3:4b"
-    assert seen["reranker"] == "reranker"
+    assert seen["components"] == "chroma"
+    assert seen["options"].multi_query is True
 
 
-def test_main_uses_the_given_database(monkeypatch):
+def test_main_uses_the_given_database(monkeypatch, capsys):
     seen = {}
-
-    def fake_retrieve(question, embedder, model, database, reranker, n=3):
-        seen["database"] = database
-        return {"kind": "lookup", "hits": []}
-
-    monkeypatch.setattr("rag.retrieve.EmbeddingAdapter", lambda: None)
-    monkeypatch.setattr("rag.retrieve.GenerationAdapter", lambda model=None: None)
-    monkeypatch.setattr("rag.retrieve.DatabaseAdapter", lambda path: path)
-    monkeypatch.setattr("rag.retrieve.RerankerAdapter", lambda: None)
-    monkeypatch.setattr("rag.retrieve.retrieve", fake_retrieve)
-    monkeypatch.setattr("rag.retrieve.generate", lambda *args: "ok")
+    monkeypatch.setattr(
+        "rag.pipeline.build_components", lambda path: seen.setdefault("db", path)
+    )
+    monkeypatch.setattr(
+        "rag.pipeline.answer", lambda question, components, options: {"answer": "ok"}
+    )
     assert main(["question", "other"]) == 0
-    assert seen["database"] == "other"
+    assert seen["db"] == "other"
+    assert capsys.readouterr().out.strip() == "ok"
 
 
 def test_trace_enables_stage_logs(monkeypatch):

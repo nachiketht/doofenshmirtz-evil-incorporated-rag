@@ -2,6 +2,7 @@ from rag.config import GENERATE_MODEL
 from rag.logutil import log, stage
 
 EMPTY = "No matching policy text."
+NOT_FOUND = "No policy passage answers this question."
 SYSTEM = """You answer questions about Doofenshmirtz Evil Inc policies.
 Use only the policy passages in the user message.
 If the passages do not contain the answer, say so.
@@ -21,7 +22,8 @@ def side_text(label: str, item) -> str:
 
 
 def chunk_block(hit: dict) -> str:
-    return f"{hit['policy']} {hit['version']} {hit['heading_path']}\n{hit['text']}"
+    text = hit.get("context_text") or hit["text"]
+    return f"{hit['policy']} {hit['version']} {hit['heading_path']}\n{text}"
 
 
 def pair_block(pair: dict) -> str:
@@ -48,6 +50,8 @@ def citations(kind: str, hits: list) -> str:
 
 
 def generate(question: str, kind: str, hits: list, model) -> str:
+    if kind == "not_found":
+        return NOT_FOUND
     if not hits:
         return EMPTY
     blocks = pair_block if kind == "compare" else chunk_block

@@ -1,14 +1,30 @@
+"""Retrieval: access gate -> catalog -> route -> (multi-query) hybrid search ->
+rerank -> MMR -> self-correction. Compare targets arbitrary version pairs.
+
+``retrieve`` is backend-agnostic: it only talks to the DatabaseAdapter
+surface (``documents`` + filtered ``query``), so Chroma, Pinecone and the
+Matryoshka wrapper all work unchanged. Every step runs inside ``stage(...)``
+so the trace shows its latency, tokens and cost.
+"""
+
 import math
 import re
 import sys
 import time
+from dataclasses import dataclass, field
 
-from adpater.database_adapter import DatabaseAdapter
-from adpater.embedding_adapter import EmbeddingAdapter
-from adpater.generation_adapter import GenerationAdapter
-from adpater.rerank_adapter import RerankerAdapter
-from rag.config import ROUTE_MODEL
-from rag.generate import generate
+from rag import lifecycle
+from rag.access import access_filter, parse_access, visible
+from rag.algorithms import (
+    CORRECTIVE_PROMPT,
+    REWRITE_PROMPT,
+    compare_targets,
+    mentioned_date,
+    mmr,
+    parse_queries,
+    rrf,
+)
+from rag.config import env_flag, env_number, env_value
 from rag.logutil import (
     disable_question_log,
     enable_question_log,
@@ -17,14 +33,59 @@ from rag.logutil import (
     stage,
 )
 from rag.router import route
+from rag.version import version_key
 
 RRF = 60
 FUSE_N = 20
 TOP_N = 3
+CANDIDATE_K = 50
 ALIASES = {
     "Time and Usage Policy": "Time & Usage Policy",
     "Health Policy": "Health & Wellness Policy",
 }
+
+
+@dataclass
+class RetrievalOptions:
+    """Knobs for one retrieval. Defaults are the plain baseline; ``from_env``
+    turns the enterprise algorithms on (each can be disabled by env)."""
+
+    top_n: int = TOP_N
+    fuse_n: int = FUSE_N
+    candidate_k: int = CANDIDATE_K
+    rrf_k: int = RRF
+    multi_query: bool = False
+    num_queries: int = 3
+    mmr: bool = False
+    mmr_lambda: float = 0.7
+    self_correct: bool = False
+    min_cosine: float = 0.3
+    min_rerank_score: float = 0.1
+    max_retries: int = 1
+    lost_in_middle: bool = False
+    expand_parents: bool = False
+    as_of: str | None = None
+    filters: dict = field(default_factory=dict)
+    entity: str | None = None
+
+    @classmethod
+    def from_env(cls, path=".env") -> "RetrievalOptions":
+        return cls(
+            top_n=int(env_number("RAG_TOP_N", TOP_N, path)),
+            fuse_n=int(env_number("RAG_FUSE_N", FUSE_N, path)),
+            candidate_k=int(env_number("RAG_CANDIDATE_K", CANDIDATE_K, path)),
+            rrf_k=int(env_number("RAG_RRF_K", RRF, path)),
+            multi_query=env_flag("RAG_MULTI_QUERY", True, path),
+            num_queries=int(env_number("RAG_NUM_QUERIES", 3, path)),
+            mmr=env_flag("RAG_MMR", True, path),
+            mmr_lambda=env_number("RAG_MMR_LAMBDA", 0.7, path),
+            self_correct=env_flag("RAG_SELF_CORRECT", True, path),
+            min_cosine=env_number("RAG_MIN_COSINE", 0.3, path),
+            min_rerank_score=env_number("RAG_MIN_RERANK_SCORE", 0.1, path),
+            lost_in_middle=env_flag("RAG_LOST_IN_MIDDLE", True, path),
+            expand_parents=env_flag("RAG_EXPAND_PARENTS", True, path),
+            as_of=env_value("RAG_AS_OF", "", path) or None,
+        )
 
 
 def canonicalize(name: str) -> str:
@@ -43,10 +104,6 @@ def catalog(rows: list[dict]) -> dict:
         name: tuple(sorted(versions, key=version_key))
         for name, versions in policies.items()
     }
-
-
-def version_key(version: str) -> tuple:
-    return tuple(int(part) for part in version.split("."))
 
 
 def fold(rows: list[dict]) -> list[dict]:
@@ -76,7 +133,6 @@ def candidates(rows: list[dict], pairs: list[tuple]) -> list[dict]:
 
 
 def cosine(left: list[float], right: list[float]) -> float:
-    # TODO: switch this from simple cosine to hnsw as corpus grows, foundations baked into code but not implemented
     if not left or not right or len(left) != len(right):
         return 0.0
     dot = sum(a * b for a, b in zip(left, right, strict=True))
@@ -240,83 +296,374 @@ def top_ids(hits) -> str:
     return ",".join(ids)
 
 
-def retrieve(question, embedder, model, database, reranker, n=TOP_N) -> dict:
-    with stage("database"):
-        rows = fold(database.rows())
-    policies = catalog(rows)
-    with stage("router"):
-        decision = route(question, model, policies)
-    with stage("embedder"):
-        vector = embedder.embed([question], task="query")[0]
+def rerank_items(question, items, texts, reranker):
+    """All items, reranked best-first, with ``rerank_score`` when calibrated."""
+    if not items:
+        return []
+    scored = getattr(reranker, "rerank_scored", None)
+    if scored is None:
+        return [
+            dict(item)
+            for item in apply_rerank(question, items, texts, reranker, len(items))
+        ]
+    by_text = {}
+    for item, text in zip(items, texts, strict=True):
+        by_text.setdefault(text, []).append(item)
+    ordered = []
+    for text, score in scored(question, texts):
+        bucket = by_text.get(text)
+        if not bucket:
+            continue
+        ordered.append({**bucket.pop(0), "rerank_score": score})
+    for bucket in by_text.values():
+        ordered.extend(dict(item) for item in bucket)
+    return ordered
+
+
+# --------------------------------------------------------------------------
+# catalog + filters
+
+
+def load_catalog(database, level: str) -> list[dict]:
+    entries = database.documents(access_filter(level))
+    return [
+        {
+            **entry,
+            "raw_policy": entry["policy"],
+            "policy": canonicalize(entry["policy"]),
+        }
+        for entry in entries
+        if visible(entry, level)
+    ]
+
+
+def versions_by_policy(entries: list[dict], active_only: bool = True) -> dict:
+    grouped: dict[str, set] = {}
+    for entry in entries:
+        if active_only and entry.get("status", "active") != "active":
+            continue
+        grouped.setdefault(entry["policy"], set()).add(entry["version"])
+    return {
+        name: tuple(sorted(versions, key=version_key))
+        for name, versions in sorted(grouped.items())
+    }
+
+
+def raw_names(entries: list[dict]) -> dict[str, list[str]]:
+    names: dict[str, set] = {}
+    for entry in entries:
+        names.setdefault(entry["policy"], set()).add(entry["raw_policy"])
+    return {policy: sorted(raws) for policy, raws in names.items()}
+
+
+def base_filter(level: str, options: RetrievalOptions, active_only: bool) -> dict:
+    where = dict(access_filter(level))
+    if active_only:
+        where["status"] = "active"
+    for key in ("department", "clause_type", "doc_type"):
+        value = (options.filters or {}).get(key)
+        if value:
+            where[key] = (
+                {"$in": list(value)} if isinstance(value, list | tuple) else value
+            )
+    return where
+
+
+def pair_filter(pairs, names) -> list[dict]:
+    clauses = []
+    for policy, version in pairs:
+        raws = names.get(policy, [policy])
+        name = raws[0] if len(raws) == 1 else {"$in": raws}
+        clauses.append({"policy": name, "version": version})
+    return clauses
+
+
+# --------------------------------------------------------------------------
+# search
+
+
+def expand_queries(question, model, options) -> list[str]:
+    if not options.multi_query or options.num_queries < 2:
+        return [question]
+    with stage("query_rewrite"):
+        try:
+            raw = model.generate(
+                REWRITE_PROMPT.format(count=options.num_queries - 1, question=question)
+            )
+        except Exception as error:  # noqa: BLE001 - rewrites are optional
+            log("query_rewrite", f"failed error={type(error).__name__}")
+            return [question]
+        rewrites = parse_queries(raw, options.num_queries - 1)
+    queries = [question] + [q for q in rewrites if q != question]
+    log("query_rewrite", f"queries={len(queries)}")
+    return queries[: options.num_queries]
+
+
+def embed_queries(embedder, queries, vector):
+    vectors = [vector]
+    extra = queries[1:]
+    if extra:
+        with stage("embed"):
+            more = embedder.embed(extra, task="query")
+        if len(more) == len(extra):
+            vectors.extend(more)
+    return vectors
+
+
+def search(queries, vectors, database, where, level, options) -> list[dict]:
+    """Dense ANN per query + BM25 per query over the pooled candidates, fused by RRF."""
+    pool: dict[str, dict] = {}
+    rankings: list[list[str]] = []
+    for query_vector in vectors:
+        with stage("retrieve"):
+            found = database.query(query_vector, options.candidate_k, where)
+        found = [row for row in fold(found) if visible(row, level)]
+        if options.entity:
+            needle = options.entity.lower()
+            found = [
+                row for row in found if needle in str(row.get("entities", "")).lower()
+            ]
+        rankings.append([row["id"] for row in found])
+        for row in found:
+            pool.setdefault(row["id"], row)
+    rows = fold(list(pool.values()))
+    if not rows:
+        return []
+    with stage("hybrid"):
+        texts = [row.get("embed_text") or row["text"] for row in rows]
+        for query in queries:
+            keyword = bm25_scores(query, texts)
+            order = sorted(range(len(rows)), key=lambda i: (-keyword[i], rows[i]["id"]))
+            rankings.append([rows[i]["id"] for i in order])
+        scores = rrf(rankings, options.rrf_k)
+        fused = sorted(rows, key=lambda row: (-scores.get(row["id"], 0.0), row["id"]))
+        fused = [
+            {
+                **row,
+                "score": scores.get(row["id"], 0.0),
+                "cosine": row.get("score", 0.0),
+            }
+            for row in fused[: options.fuse_n]
+        ]
+    log("retrieve", f"candidates={len(rows)} queries={len(queries)}")
+    return fused
+
+
+def finish(question, vector, fused, reranker, options) -> list[dict]:
+    with stage("rerank"):
+        ordered = rerank_items(
+            question, fused, [row["text"] for row in fused], reranker
+        )
+    if options.mmr and len(ordered) > options.top_n:
+        with stage("mmr"):
+            return mmr(ordered, vector, options.top_n, options.mmr_lambda)
+    return ordered[: options.top_n]
+
+
+def relevance(hits: list[dict], vector) -> dict:
+    best_cosine = max(
+        (cosine(vector, hit.get("vector") or []) for hit in hits), default=0
+    )
+    if hits and not hits[0].get("vector"):
+        best_cosine = max((hit.get("cosine", 0.0) for hit in hits), default=0)
+    scores = [
+        hit["rerank_score"] for hit in hits if hit.get("rerank_score") is not None
+    ]
+    return {
+        "cosine": round(best_cosine, 4),
+        "rerank": round(max(scores), 4) if scores else None,
+    }
+
+
+def is_low(signal: dict, options: RetrievalOptions) -> bool:
+    if signal["cosine"] < options.min_cosine:
+        return True
+    return signal["rerank"] is not None and signal["rerank"] < options.min_rerank_score
+
+
+# --------------------------------------------------------------------------
+# entry point
+
+
+def retrieve(
+    question,
+    embedder,
+    model,
+    database,
+    reranker,
+    n=TOP_N,
+    options: RetrievalOptions | None = None,
+    access=None,
+    vector=None,
+    entries=None,
+) -> dict:
+    options = options or RetrievalOptions(top_n=n)
+    if access is None:
+        with stage("access"):
+            access = parse_access(question)
+        question = access.question
+    # else: the caller already stripped the phrase from ``question``
+    level = access.level
+    if entries is None:
+        with stage("catalog"):
+            entries = load_catalog(database, level)
+    active = versions_by_policy(entries)
+    everything = versions_by_policy(entries, active_only=False)
+    names = raw_names(entries)
+    with stage("route"):
+        decision = route(question, model, active)
+    if vector is None:
+        with stage("embed"):
+            vector = embedder.embed([question], task="query")[0]
     kind = decision["kind"]
     policy = decision["policy"]
-    if kind == "compare" and policy not in policies:
+    if kind == "compare" and policy not in everything:
         log("router", "kind=lookup reason=unknown policy")
         kind = "lookup"
-        policy = ""
         decision = {"kind": "lookup", "policy": "", "version": ""}
     if kind == "compare":
-        hits = compare(question, vector, rows, policies, policy, reranker, n)
+        hits, meta = compare(
+            question,
+            vector,
+            database,
+            everything[policy],
+            policy,
+            names,
+            reranker,
+            level,
+            options,
+        )
     else:
-        hits = lookup(question, vector, rows, policies, decision, reranker, n)
-    log("retrieve", f"hits={len(hits)} top={top_ids(hits)}")
-    return {"kind": kind, "hits": hits}
+        hits, meta = lookup(
+            question,
+            vector,
+            embedder,
+            model,
+            database,
+            active,
+            entries,
+            names,
+            decision,
+            reranker,
+            level,
+            options,
+        )
+        if meta.get("not_found"):
+            kind = "not_found"
+    log("retrieve", f"kind={kind} hits={len(hits)} top={top_ids(hits)}")
+    return {"kind": kind, "hits": hits, "decision": decision, "access": level, **meta}
 
 
-def lookup(question, vector, rows, policies, decision, reranker, n):
-    chosen = candidates(
-        rows, lookup_pairs(policies, decision["policy"], decision["version"])
+def lookup(
+    question,
+    vector,
+    embedder,
+    model,
+    database,
+    active,
+    entries,
+    names,
+    decision,
+    reranker,
+    level,
+    options,
+):
+    as_of = options.as_of or mentioned_date(question)
+    if as_of and not decision["version"]:
+        forced = lifecycle.in_force(entries, as_of)
+        if decision["policy"]:
+            forced = {k: v for k, v in forced.items() if k == decision["policy"]}
+        pairs = sorted(forced.items())
+        where = base_filter(level, options, active_only=False)
+        log("retrieve", f"as_of={as_of} documents={len(pairs)}")
+    else:
+        pairs = (
+            lookup_pairs(active, decision["policy"], decision["version"])
+            if active
+            else []
+        )
+        where = base_filter(level, options, active_only=True)
+    if not pairs:
+        log("retrieve", "candidates=0")
+        return [], {"queries": [question]}
+    where["$or"] = pair_filter(pairs, names)
+    queries = expand_queries(question, model, options)
+    vectors = embed_queries(embedder, queries, vector)
+    hits = finish(
+        question,
+        vector,
+        search(queries, vectors, database, where, level, options),
+        reranker,
+        options,
     )
-    log("retrieve", f"candidates={len(chosen)}")
-    with stage("hybrid"):
-        fused = hybrid(question, vector, chosen)
-    with stage("rerank"):
-        return apply_rerank(
-            question, fused, [row["text"] for row in fused], reranker, n
-        )
+    meta = {"queries": queries}
+    if not options.self_correct or not hits:
+        if options.self_correct and not hits:
+            meta["not_found"] = True
+        return hits, meta
+    signal = relevance(hits, vector)
+    meta["relevance"] = signal
+    retries = 0
+    while is_low(signal, options) and retries < options.max_retries:
+        retries += 1
+        with stage("self_correct"):
+            rewritten = str(
+                model.generate(CORRECTIVE_PROMPT.format(question=question)) or ""
+            ).strip()
+            rewritten = (
+                rewritten.splitlines()[0].strip().strip('"') if rewritten else question
+            )
+            log("self_correct", f"retry={retries} cosine={signal['cosine']}")
+            retry_vector = embedder.embed([rewritten], task="query")[0]
+        fused = search([rewritten], [retry_vector], database, where, level, options)
+        hits = finish(rewritten, retry_vector, fused, reranker, options)
+        signal = relevance(hits, retry_vector)
+        meta.update(corrected_query=rewritten, relevance=signal)
+    if not hits or is_low(signal, options):
+        log("self_correct", "result=not_found")
+        meta["not_found"] = True
+        return [], meta
+    return hits, meta
 
 
-def compare(question, vector, rows, policies, policy, reranker, n):
-    versions = policies[policy]
-    latest = versions[-1]
-    previous = versions[-2] if len(versions) > 1 else None
-    # TODO: This always compares only to one version before, even on explicit request it diffs only to previous version, fix it
-    current_rows = candidates(rows, [(policy, latest)])
-    previous_rows = [] if previous is None else candidates(rows, [(policy, previous)])
-    log("retrieve", f"candidates={len(current_rows) + len(previous_rows)}")
-    with stage("hybrid"):
-        pairs = pair_hits(
-            hybrid(question, vector, current_rows),
-            hybrid(question, vector, previous_rows),
-        )
+def compare(
+    question, vector, database, versions, policy, names, reranker, level, options
+):
+    older, newer = compare_targets(question, versions)
+    log("retrieve", f"compare {policy} {older} -> {newer}")
+    base = base_filter(level, options, active_only=False)
+
+    def side_hits(version):
+        if version is None:
+            return []
+        where = {**base, "$or": pair_filter([(policy, version)], names)}
+        return search([question], [vector], database, where, level, options)
+
+    pairs = pair_hits(side_hits(newer), side_hits(older))
     with stage("rerank"):
-        return apply_rerank(
-            question, pairs, [pair_text(pair) for pair in pairs], reranker, n
+        ordered = rerank_items(
+            question, pairs, [pair_text(pair) for pair in pairs], reranker
         )
+    return ordered[: options.top_n], {"queries": [question], "versions": [older, newer]}
 
 
 def main(argv=None, trace: bool = False) -> int:
+    from rag.pipeline import answer, build_components, print_trace
+
     started = time.perf_counter()
     argv = list(sys.argv[1:] if argv is None else argv)
     question = argv[0] if argv else ""
-    db_path = argv[1] if len(argv) > 1 else "chroma"
+    db_path = argv[1] if len(argv) > 1 else None
     if trace:
         enable_question_log()
     else:
         silence_console()
     try:
-        router = GenerationAdapter(model=ROUTE_MODEL)
-        answerer = GenerationAdapter()
-        found = retrieve(
-            question,
-            embedder=EmbeddingAdapter(),
-            model=router,
-            database=DatabaseAdapter(db_path),
-            reranker=RerankerAdapter(),
-        )
-        text = generate(question, found["kind"], found["hits"], answerer)
-        print(text)
+        components = build_components(db_path)
+        result = answer(question, components, RetrievalOptions.from_env())
+        print(result["answer"])
         if trace:
+            print_trace(result)
             elapsed = time.perf_counter() - started
             print(f"latency: {elapsed:.3f}s")
     finally:

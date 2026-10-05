@@ -1,6 +1,6 @@
 import pytest
 
-from adpater.embedding_adapter import EmbeddingAdapter
+from adapter.embedding_adapter import EmbeddingAdapter
 
 
 class FakeClient:

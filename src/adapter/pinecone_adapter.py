@@ -1,0 +1,317 @@
+"""Pinecone-backed DatabaseAdapter (serverless), same surface as the Chroma one.
+
+* Chunks live in ``namespace`` (one per environment: dev / staging / prod).
+* A document registry (one record per policy version: classification, status,
+  is_latest, effective dates, file hash) lives in ``<namespace>__documents`` so
+  the catalog never needs a full scan.
+* Pinecone record ids are ASCII-safe: ``<policy-slug>|<version>|<sha1>``; the
+  original ``policy|version|heading_path`` id is kept in metadata as ``chunk_id``.
+* Chunk text is stored in metadata (``text``) because Pinecone has no
+  document field.
+
+The API key comes from ``PINECONE_API_KEY`` (env or ``.env``); tests inject a
+fake index instead.
+"""
+
+import hashlib
+import re
+
+from adapter.records import (
+    DOCUMENT_FIELDS,
+    aggregate_documents,
+    from_metadata,
+    to_metadata,
+)
+from rag.config import env_value
+from rag.filters import matches, to_mongo
+from rag.logutil import log
+from rag.tracing import record_usage
+from rag.version import version_key
+
+BACKEND = "pinecone"
+BATCH = 100
+SLUG = re.compile(r"[^a-z0-9]+")
+REGISTRY_SUFFIX = "__documents"
+
+
+def pinecone_api_key(path=".env") -> str:
+    key = env_value("PINECONE_API_KEY", path=path)
+    if not key:
+        raise ValueError("PINECONE_API_KEY is missing")
+    return key
+
+
+def slug(text: str) -> str:
+    return SLUG.sub("-", str(text).lower()).strip("-") or "x"
+
+
+def doc_prefix(policy: str, version: str) -> str:
+    return f"{slug(policy)}|{slug(version)}|"
+
+
+def vector_id(record_id: str, policy: str, version: str) -> str:
+    digest = hashlib.sha1(record_id.encode("utf-8")).hexdigest()
+    return f"{doc_prefix(policy, version)}{digest}"
+
+
+def registry_id(policy: str, version: str) -> str:
+    return f"doc|{doc_prefix(policy, version)}"
+
+
+def _get(obj, name, default=None):
+    if isinstance(obj, dict):
+        return obj.get(name, default)
+    return getattr(obj, name, default)
+
+
+def connect_index(api_key: str, name: str, dimension: int | None, cloud, region):
+    from pinecone import Pinecone, ServerlessSpec  # optional dependency
+
+    client = Pinecone(api_key=api_key)
+    if not client.has_index(name):
+        if not dimension:
+            raise ValueError(f"pinecone index {name!r} missing; pass a dimension")
+        client.create_index(
+            name=name,
+            dimension=dimension,
+            metric="cosine",
+            spec=ServerlessSpec(cloud=cloud, region=region),
+        )
+    return client.Index(name)
+
+
+class PineconeDatabaseAdapter:
+    backend = BACKEND
+
+    def __init__(
+        self,
+        index=None,
+        index_name: str = "doofenshmirtz-policies",
+        namespace: str = "dev",
+        api_key: str | None = None,
+        dimension: int | None = None,
+        cloud: str = "aws",
+        region: str = "us-east-1",
+        env_path=".env",
+        connect=connect_index,
+    ):
+        self.index_name = index_name
+        self.namespace = namespace
+        self.registry = f"{namespace}{REGISTRY_SUFFIX}"
+        self.dimension = dimension
+        self._settings = (cloud, region)
+        self._index = index
+        self._connect = connect
+        self._api_key = api_key
+        self._env_path = env_path
+
+    @property
+    def index(self):
+        if self._index is None:
+            key = self._api_key or pinecone_api_key(self._env_path)
+            cloud, region = self._settings
+            self._index = self._connect(
+                key, self.index_name, self.dimension, cloud, region
+            )
+        return self._index
+
+    # ---- writes ---------------------------------------------------------
+    def upsert(self, records: list[dict], vectors: list[list[float]]) -> None:
+        if not records:
+            return
+        if self.dimension is None and vectors:
+            self.dimension = len(vectors[0])
+        payload = []
+        for record, vector in zip(records, vectors, strict=True):
+            meta = to_metadata(record)
+            meta["chunk_id"] = record["id"]
+            meta["text"] = record["text"]
+            payload.append(
+                {
+                    "id": vector_id(record["id"], record["policy"], record["version"]),
+                    "values": [float(value) for value in vector],
+                    "metadata": meta,
+                }
+            )
+        for start in range(0, len(payload), BATCH):
+            self.index.upsert(
+                vectors=payload[start : start + BATCH], namespace=self.namespace
+            )
+        record_usage(BACKEND, writes=len(payload))
+        log("database", f"pinecone ns={self.namespace} upserts={len(payload)}")
+
+    def _ids_with_prefix(self, prefix: str, namespace: str) -> list[str]:
+        ids = []
+        for page in self.index.list(prefix=prefix, namespace=namespace):
+            if isinstance(page, (list, tuple)):
+                ids.extend(_get(item, "id", item) for item in page)
+            else:
+                ids.extend(_get(item, "id", item) for item in _get(page, "vectors", []))
+        return [str(item) for item in ids]
+
+    def delete_document(self, policy: str, version: str) -> int:
+        ids = self._ids_with_prefix(doc_prefix(policy, version), self.namespace)
+        for start in range(0, len(ids), 1000):
+            self.index.delete(ids=ids[start : start + 1000], namespace=self.namespace)
+        self.index.delete(ids=[registry_id(policy, version)], namespace=self.registry)
+        record_usage(BACKEND, writes=len(ids) + 1)
+        log(
+            "database",
+            f"pinecone delete policy={policy} version={version} n={len(ids)}",
+        )
+        return len(ids)
+
+    def update_document(self, policy: str, version: str, values: dict) -> int:
+        values = {key: value for key, value in values.items() if value is not None}
+        ids = self._ids_with_prefix(doc_prefix(policy, version), self.namespace)
+        for item in ids:
+            self.index.update(id=item, set_metadata=values, namespace=self.namespace)
+        rid = registry_id(policy, version)
+        doc_values = {k: v for k, v in values.items() if k in DOCUMENT_FIELDS}
+        if doc_values:
+            self.index.update(id=rid, set_metadata=doc_values, namespace=self.registry)
+        record_usage(BACKEND, writes=len(ids) + 1)
+        log(
+            "database",
+            f"pinecone update policy={policy} version={version} n={len(ids)}",
+        )
+        return len(ids)
+
+    def put_document(self, entry: dict) -> None:
+        dimension = self.dimension or self._stats_dimension()
+        vector = [0.0] * dimension
+        vector[0] = 1.0  # Pinecone rejects all-zero dense vectors
+        meta = {
+            key: entry[key]
+            for key in DOCUMENT_FIELDS
+            if key in entry and entry[key] is not None
+        }
+        meta["chunks"] = int(entry.get("chunks", 0))
+        self.index.upsert(
+            vectors=[
+                {
+                    "id": registry_id(entry["policy"], entry["version"]),
+                    "values": vector,
+                    "metadata": meta,
+                }
+            ],
+            namespace=self.registry,
+        )
+        record_usage(BACKEND, writes=1)
+
+    # ---- reads ----------------------------------------------------------
+    def _stats_dimension(self) -> int:
+        stats = self.index.describe_index_stats()
+        dimension = _get(stats, "dimension")
+        if not dimension:
+            raise ValueError("cannot determine pinecone index dimension")
+        self.dimension = int(dimension)
+        return self.dimension
+
+    def _row(self, match) -> dict:
+        meta = dict(_get(match, "metadata", {}) or {})
+        record_id = meta.pop("chunk_id", _get(match, "id"))
+        text = meta.pop("text", "")
+        row = from_metadata(record_id, text, meta, _get(match, "values"))
+        score = _get(match, "score")
+        if score is not None:
+            row["score"] = float(score)
+        return row
+
+    def query(self, vector: list[float], n: int, where: dict | None = None):
+        if n <= 0:
+            return []
+        kwargs = {
+            "vector": [float(value) for value in vector],
+            "top_k": n,
+            "namespace": self.namespace,
+            "include_values": True,
+            "include_metadata": True,
+        }
+        mongo = to_mongo(where)
+        if mongo:
+            kwargs["filter"] = mongo
+        result = self.index.query(**kwargs)
+        record_usage(BACKEND, queries=1)
+        hits = [self._row(match) for match in _get(result, "matches", []) or []]
+        log("database", f"pinecone query n={n} where={bool(mongo)} hits={len(hits)}")
+        return hits
+
+    def get(self, where: dict | None = None, include_vectors: bool = False):
+        rows = []
+        token = None
+        mongo = to_mongo(where) or {"policy": {"$ne": ""}}
+        while True:
+            kwargs = {"filter": mongo, "namespace": self.namespace, "limit": 1000}
+            if token:
+                kwargs["pagination_token"] = token
+            page = self.index.fetch_by_metadata(**kwargs)
+            vectors = _get(page, "vectors", {}) or {}
+            for item in vectors.values():
+                row = self._row(item)
+                if not include_vectors:
+                    row["vector"] = []
+                rows.append(row)
+            pagination = _get(page, "pagination")
+            token = _get(pagination, "next") if pagination else None
+            if not token:
+                break
+        record_usage(BACKEND, queries=1)
+        return [row for row in rows if matches(row, where)]
+
+    def fetch_vectors(self, rows: list[dict]) -> dict[str, list[float]]:
+        if not rows:
+            return {}
+        by_vector_id = {
+            vector_id(row["id"], row["policy"], row["version"]): row["id"]
+            for row in rows
+        }
+        result = self.index.fetch(ids=list(by_vector_id), namespace=self.namespace)
+        record_usage(BACKEND, queries=1)
+        vectors = _get(result, "vectors", {}) or {}
+        return {
+            by_vector_id[key]: [float(v) for v in _get(item, "values", [])]
+            for key, item in vectors.items()
+            if key in by_vector_id
+        }
+
+    def rows(self) -> list[dict]:
+        return self.get(include_vectors=True)
+
+    def documents(self, where: dict | None = None) -> list[dict]:
+        try:
+            dimension = self.dimension or self._stats_dimension()
+        except ValueError:
+            return []  # empty index: nothing registered yet
+        probe = [0.0] * dimension
+        probe[0] = 1.0
+        kwargs = {
+            "vector": probe,
+            "top_k": 10000,
+            "namespace": self.registry,
+            "include_metadata": True,
+        }
+        mongo = to_mongo(where)
+        if mongo:
+            kwargs["filter"] = mongo
+        result = self.index.query(**kwargs)
+        record_usage(BACKEND, queries=1)
+        entries = []
+        for match in _get(result, "matches", []) or []:
+            meta = dict(_get(match, "metadata", {}) or {})
+            entry = {key: meta.get(key, "") for key in DOCUMENT_FIELDS}
+            entry["chunks"] = int(meta.get("chunks", 0))
+            entries.append(entry)
+        if not entries:
+            # Chunks written without put_document (e.g. bulk loads): derive the
+            # catalog from chunk metadata, like the Chroma adapter does.
+            return aggregate_documents(self.get(where))
+        return sorted(
+            entries, key=lambda item: (item["policy"], version_key(item["version"]))
+        )
+
+    def count(self) -> int:
+        stats = self.index.describe_index_stats()
+        namespaces = _get(stats, "namespaces", {}) or {}
+        info = namespaces.get(self.namespace)
+        return int(_get(info, "vector_count", 0) or 0) if info else 0
