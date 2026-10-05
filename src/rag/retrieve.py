@@ -647,27 +647,80 @@ def compare(
     return ordered[: options.top_n], {"queries": [question], "versions": [older, newer]}
 
 
+def json_hits(hits: list[dict]) -> list[dict]:
+    """Hits without embedding vectors, for ``--json`` output."""
+    drop = {"vector", "embed_text", "parent_text"}
+    out = []
+    for hit in hits:
+        item = {key: value for key, value in hit.items() if key not in drop}
+        for side_key in ("current", "previous"):
+            if isinstance(item.get(side_key), dict):
+                item[side_key] = {
+                    k: v for k, v in item[side_key].items() if k not in drop
+                }
+        out.append(item)
+    return out
+
+
+def parse_args(argv):
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="python -m rag.retrieve")
+    parser.add_argument("question", nargs="?", default="")
+    parser.add_argument("database", nargs="?", default=None, help="Chroma path")
+    parser.add_argument("--json", action="store_true", help="print a JSON result")
+    parser.add_argument("--no-cache", action="store_true", help="skip the cache")
+    return parser.parse_args(argv)
+
+
 def main(argv=None, trace: bool = False) -> int:
+    import json
+
+    from rag import feedback
     from rag.pipeline import answer, build_components, print_trace
 
     started = time.perf_counter()
-    argv = list(sys.argv[1:] if argv is None else argv)
-    question = argv[0] if argv else ""
-    db_path = argv[1] if len(argv) > 1 else None
-    if trace:
+    args = parse_args(list(sys.argv[1:] if argv is None else argv))
+    if trace and not args.json:
         enable_question_log()
     else:
         silence_console()
     try:
-        components = build_components(db_path)
-        result = answer(question, components, RetrievalOptions.from_env())
+        components = build_components(args.database)
+        if args.no_cache and hasattr(components, "cache"):
+            components.cache = None
+        result = answer(args.question, components, RetrievalOptions.from_env())
+        elapsed = time.perf_counter() - started
+        if isinstance(result, dict) and "trace" in result:
+            feedback.save_last(result)
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "question": result.get("question"),
+                        "answer": result["answer"],
+                        "kind": result.get("kind"),
+                        "access": result.get("access"),
+                        "cached": result.get("cached"),
+                        "trace_id": result.get("trace_id"),
+                        "queries": result.get("queries"),
+                        "corrected_query": result.get("corrected_query"),
+                        "verification": result.get("verification"),
+                        "hits": json_hits(result.get("hits", [])),
+                        "trace": result.get("trace", []),
+                        "latency_s": round(elapsed, 6),
+                    },
+                    indent=2,
+                )
+            )
+            return 0
         print(result["answer"])
         if trace:
             print_trace(result)
-            elapsed = time.perf_counter() - started
+            print("rate it: python -m rag.feedback up|down [--note ...]")
             print(f"latency: {elapsed:.3f}s")
     finally:
-        if trace:
+        if trace and not args.json:
             disable_question_log()
     return 0
 

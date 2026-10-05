@@ -130,17 +130,28 @@ class Tracer:
         return [span.as_dict() for span in self.spans] + [self.total()]
 
     def table(self) -> str:
+        """Per-step latency/tokens/cost table; ``share`` is % of total latency.
+
+        Nested steps (e.g. ``mrl_rescore`` inside ``retrieve``) are listed on
+        their own rows, so shares can add up to more than 100%.
+        """
+        rows = self.rows()
+        total_latency = rows[-1]["latency_s"] or 1e-9
         header = (
-            f"{'step':<14} {'latency':>9} {'in_tok':>7} {'out_tok':>7} "
+            f"{'step':<14} {'latency':>9} {'share':>6} {'in_tok':>7} {'out_tok':>7} "
             f"{'calls':>5} {'cost_usd':>11}  models"
         )
         lines = [header, "-" * len(header)]
-        for row in self.rows():
-            calls = row["searches"] + row["queries"]
+        for row in rows:
+            if row["step"] == "total":
+                lines.append("-" * len(header))
+            calls = row["searches"] + row["queries"] + row["writes"]
+            share = 100.0 * row["latency_s"] / total_latency
             lines.append(
-                f"{row['step']:<14} {row['latency_s']:>8.3f}s {row['input_tokens']:>7} "
-                f"{row['output_tokens']:>7} {calls:>5} {row['cost_usd']:>11.6f}  "
-                f"{','.join(row['models'])}{('  ' + row['note']) if row['note'] else ''}"
+                f"{row['step']:<14} {row['latency_s']:>8.3f}s {share:>5.1f}% "
+                f"{row['input_tokens']:>7} {row['output_tokens']:>7} {calls:>5} "
+                f"{row['cost_usd']:>11.6f}  {','.join(row['models'])}"
+                f"{('  ' + row['note']) if row['note'] else ''}"
             )
         return "\n".join(lines)
 

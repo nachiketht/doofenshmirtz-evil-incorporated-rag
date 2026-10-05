@@ -13,3 +13,5 @@ explanation.md
 lab-submission.pdf
 lab-submission.docx
 .rag/
+feedback.jsonl
+last_answer.json

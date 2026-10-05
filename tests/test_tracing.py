@@ -35,6 +35,7 @@ def test_spans_collect_latency_tokens_and_cost():
     assert rows["total"]["latency_s"] >= rows["route"]["latency_s"]
     table = tracer.table()
     assert "route" in table and "total" in table and "cost_usd" in table
+    assert "share" in table and "%" in table
 
 
 def test_usage_outside_a_tracer_is_ignored():
