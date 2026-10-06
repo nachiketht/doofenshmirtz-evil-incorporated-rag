@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,15 @@ from adapter.pinecone_adapter import PineconeDatabaseAdapter
 from rag.access import parse_access
 from rag.cache import SemanticCache
 from rag.ingest import ingest
-from rag.pipeline import Components, answer, build_cache, corpus_key, print_trace
+from rag.pipeline import (
+    Components,
+    answer,
+    build_cache,
+    build_components,
+    corpus_key,
+    print_trace,
+    with_context,
+)
 from rag.rerankers import IdentityReranker, LocalCrossEncoderReranker
 from rag.retrieve import RetrievalOptions, retrieve
 
@@ -187,6 +196,17 @@ def test_mmr_and_filters_and_entity_and_as_of():
     assert {h["version"] for h in past if h["policy"] == "HR Policy"} == {"2.0"}
     diverse = run("vacation leave", mmr=True, top_n=2)["hits"]
     assert len(diverse) == 2
+    named = retrieve(
+        "vacation leave",
+        embedder,
+        ScriptedModel(route='{"kind":"lookup","policy":"HR Policy","version":""}'),
+        database,
+        IdentityReranker(),
+        options=RetrievalOptions(as_of="2025-06-01"),
+        access=access,
+    )
+    assert {hit["policy"] for hit in named["hits"]} == {"HR Policy"}
+    assert {hit["version"] for hit in named["hits"]} == {"2.0"}
 
 
 def test_self_correction_rewrites_once_then_gives_up():
@@ -326,6 +346,54 @@ def test_not_found_answer_is_not_cached():
     assert result["kind"] == "not_found"
     assert result["answer"] == "No policy passage answers this question."
     assert len(cache) == 0
+
+
+def test_unsupported_sentences_are_logged(caplog):
+    class Hallucinating(ScriptedModel):
+        def generate(self, prompt, system=None):
+            if system is None:
+                return super().generate(prompt, system)
+            return "Unrelated moon cheese conspiracy with no policy overlap."
+
+    caplog.set_level(logging.INFO)
+    embedder = HashEmbedder()
+    parts = components(store(HR, embedder), embedder, Hallucinating())
+    result = answer("vacation leave days", parts)
+    assert result["verification"]["unsupported"]
+    assert "unsupported=" in caplog.text
+
+
+def test_parent_text_becomes_generation_context():
+    hits = [
+        {"text": "child", "parent_text": "full section"},
+        {"text": "same", "parent_text": "same"},
+        {"text": "no parent"},
+    ]
+    out = with_context(hits)
+    assert out[0]["context_text"] == "full section"
+    assert "context_text" not in out[1]
+    assert "context_text" not in out[2]
+
+
+def test_build_components_wires_adapters(monkeypatch, tmp_path):
+    from rag.config import Settings
+
+    monkeypatch.setattr("adapter.embedding_adapter.EmbeddingAdapter", lambda: "embed")
+    monkeypatch.setattr(
+        "adapter.generation_adapter.GenerationAdapter",
+        lambda model=None: f"gen:{model}",
+    )
+    monkeypatch.setattr(
+        "adapter.factory.open_database", lambda settings, path: f"db:{path}"
+    )
+    monkeypatch.setattr("rag.rerankers.build_reranker", lambda kind: f"rerank:{kind}")
+    parts = build_components(
+        str(tmp_path / "chroma"), Settings(cache_enabled=False, reranker="none")
+    )
+    assert parts.embedder == "embed"
+    assert parts.database == f"db:{tmp_path / 'chroma'}"
+    assert parts.reranker == "rerank:none"
+    assert parts.cache is None
 
 
 def test_build_cache_and_corpus_key(tmp_path):

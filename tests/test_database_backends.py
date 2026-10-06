@@ -7,10 +7,12 @@ from adapter.database_adapter import DatabaseAdapter
 from adapter.factory import open_database
 from adapter.pinecone_adapter import (
     PineconeDatabaseAdapter,
+    connect_index,
     pinecone_api_key,
     vector_id,
 )
 from rag.config import Settings
+from rag.matryoshka import MatryoshkaDatabase
 
 
 def chunk(policy, version, heading, text, **extra):
@@ -212,6 +214,55 @@ def test_delete_on_empty_pinecone_index_is_a_noop():
     assert database.delete_document("HR Policy", "1.0") == 0
 
 
+def test_pinecone_unexpected_errors_are_reraised():
+    class ListBoom(FakePineconeIndex):
+        def list(self, prefix=None, namespace=""):
+            raise RuntimeError("timeout")
+
+    with pytest.raises(RuntimeError, match="timeout"):
+        PineconeDatabaseAdapter(index=ListBoom(), namespace="dev").delete_document(
+            "HR Policy", "1.0"
+        )
+
+    class DeleteBoom(FakePineconeIndex):
+        def delete(self, ids, namespace=""):
+            raise RuntimeError("timeout")
+
+    seeded = PineconeDatabaseAdapter(index=DeleteBoom(), namespace="dev", dimension=2)
+    seed(seeded)
+    with pytest.raises(RuntimeError, match="timeout"):
+        seeded.delete_document("HR Policy", "1.0")
+
+    class UpdateBoom(FakePineconeIndex):
+        def update(self, id, set_metadata, namespace=""):
+            raise RuntimeError("timeout")
+
+    updating = PineconeDatabaseAdapter(index=UpdateBoom(), namespace="dev", dimension=2)
+    seed(updating)
+    with pytest.raises(RuntimeError, match="timeout"):
+        updating.update_document("HR Policy", "1.0", {"status": "retired"})
+
+
+def test_pinecone_documents_skips_registry_rows_that_fail_the_filter():
+    class LooseFetch(FakePineconeIndex):
+        def fetch_by_metadata(
+            self, filter, namespace="", limit=None, pagination_token=None
+        ):
+            items = list(self._ns(namespace).values())
+            start = int(pagination_token or 0)
+            page = items[start : start + (limit or len(items))]
+            nxt = start + len(page)
+            return {
+                "vectors": {item["id"]: item for item in page},
+                "pagination": {"next": str(nxt)} if nxt < len(items) else None,
+            }
+
+    database = PineconeDatabaseAdapter(index=LooseFetch(), namespace="dev")
+    seed(database)
+    hidden = database.documents({"policy": "HR Policy"})
+    assert {entry["policy"] for entry in hidden} == {"HR Policy"}
+
+
 def test_pinecone_get_follows_pagination():
     index = FakePineconeIndex()
     database = PineconeDatabaseAdapter(index=index, namespace="dev")
@@ -262,3 +313,103 @@ def test_factory_defaults_to_chroma_and_selects_pinecone(tmp_path):
     assert pine.namespace == "prod"
     with pytest.raises(ValueError, match="RAG_DB_BACKEND"):
         open_database(Settings(backend="mongo"))
+
+
+def test_factory_wraps_pinecone_when_mrl_is_configured(monkeypatch):
+    built = []
+
+    def fake_pc(**kwargs):
+        built.append(kwargs)
+        return PineconeDatabaseAdapter(
+            index=FakePineconeIndex(),
+            namespace=kwargs.get("namespace", "dev"),
+            dimension=kwargs.get("dimension"),
+        )
+
+    monkeypatch.setattr("adapter.factory.PineconeDatabaseAdapter", fake_pc)
+    wrapped = open_database(
+        Settings(backend="pinecone", mrl_dims=128, pinecone_index="evil")
+    )
+    assert isinstance(wrapped, MatryoshkaDatabase)
+    assert wrapped.dims == 128
+    assert any(item.get("dimension") == 128 for item in built)
+    assert any(item.get("index_name") == "evil-mrl128" for item in built)
+
+
+def test_pinecone_catalog_falls_back_to_chunk_metadata():
+    database = PineconeDatabaseAdapter(index=FakePineconeIndex(), namespace="dev")
+    records = [chunk("HR Policy", "1.0", "3. Leave", "cake on friday")]
+    database.upsert(records, [[1.0, 0.0]])
+    catalog = database.documents()
+    assert catalog[0]["policy"] == "HR Policy"
+    assert catalog[0]["chunks"] == 1
+
+
+def test_pinecone_put_document_reads_index_dimension():
+    index = FakePineconeIndex(dimension=2)
+    database = PineconeDatabaseAdapter(index=index, namespace="dev")
+    database.put_document(
+        {"policy": "HR Policy", "version": "1.0", "status": "active", "chunks": 1}
+    )
+    assert database.dimension == 2
+
+    class NoDim(FakePineconeIndex):
+        def describe_index_stats(self):
+            return {"dimension": 0, "namespaces": {}}
+
+    with pytest.raises(ValueError, match="dimension"):
+        PineconeDatabaseAdapter(index=NoDim(), namespace="dev").put_document(
+            {"policy": "HR Policy", "version": "1.0", "chunks": 1}
+        )
+
+
+def test_pinecone_list_pages_can_be_objects():
+    class Page:
+        def __init__(self, ids):
+            self.vectors = [{"id": item} for item in ids]
+
+    class Indexed(FakePineconeIndex):
+        def list(self, prefix=None, namespace=""):
+            ids = sorted(k for k in self._ns(namespace) if k.startswith(prefix or ""))
+            yield Page(ids)
+
+    database = PineconeDatabaseAdapter(index=Indexed(), namespace="dev")
+    seed(database)
+    assert database.delete_document("HR Policy", "1.0") == 1
+
+
+def test_connect_index_creates_a_missing_index(monkeypatch):
+    import sys
+    import types
+
+    created = {}
+
+    class Client:
+        def __init__(self, api_key):
+            created["key"] = api_key
+
+        def has_index(self, name):
+            return False
+
+        def create_index(self, **kwargs):
+            created["index"] = kwargs
+
+        def Index(self, name):
+            created["opened"] = name
+            return "idx"
+
+    class Spec:
+        def __init__(self, cloud, region):
+            self.cloud = cloud
+            self.region = region
+
+    fake = types.ModuleType("pinecone")
+    fake.Pinecone = Client
+    fake.ServerlessSpec = Spec
+    monkeypatch.setitem(sys.modules, "pinecone", fake)
+    assert connect_index("k", "evil", 8, "aws", "us-east-1") == "idx"
+    assert created["key"] == "k"
+    assert created["index"]["dimension"] == 8
+    assert created["opened"] == "evil"
+    with pytest.raises(ValueError, match="dimension"):
+        connect_index("k", "evil", None, "aws", "us-east-1")

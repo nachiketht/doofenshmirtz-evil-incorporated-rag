@@ -1,8 +1,11 @@
+import http.client
 import json
 import urllib.error
 import urllib.request
 
-from rag.server import Desk, public_result, serve
+import pytest
+
+from rag.server import MAX_BODY, MAX_QUESTION, Desk, as_bool, main, public_result, serve
 
 
 def sample(question, no_cache=False):
@@ -173,3 +176,105 @@ def test_public_result_strips_vectors():
     payload = public_result(sample("hi"), 1.25)
     assert payload["latency_s"] == 1.25
     assert "vector" not in payload["hits"][0]
+
+
+def test_as_bool_only_treats_known_strings_as_true():
+    assert as_bool(True) is True
+    assert as_bool(False) is False
+    assert as_bool("YES") is True
+    assert as_bool("on") is True
+    assert as_bool("0") is False
+    assert as_bool(1) is False
+
+
+def test_ask_rejects_oversized_body_non_string_and_long_question(tmp_path):
+    httpd, port = start(tmp_path)
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port)
+        conn.putrequest("POST", "/ask")
+        conn.putheader("Content-Type", "application/json")
+        conn.putheader("Content-Length", str(MAX_BODY + 1))
+        conn.endheaders()
+        conn.send(b"{}")
+        response = conn.getresponse()
+        assert response.status == 400
+        assert b"too large" in response.read()
+        conn.close()
+        status, body, _ = request(port, "POST", "/ask", {"question": ["list"]})
+        assert status == 400
+        assert "string" in json.loads(body)["error"]
+        status, body, _ = request(
+            port, "POST", "/ask", {"question": "x" * (MAX_QUESTION + 1)}
+        )
+        assert status == 400
+        assert "too long" in json.loads(body)["error"]
+        status, _, _ = request(port, "POST", "/ask", raw=b"[1]")
+        assert status == 400
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_ask_returns_500_when_the_pipeline_raises(tmp_path):
+    def boom(question, no_cache=False):
+        raise RuntimeError("models down")
+
+    httpd, port = start(tmp_path, boom)
+    try:
+        status, body, _ = request(port, "POST", "/ask", {"question": "cake?"})
+        assert status == 500
+        assert "models down" in json.loads(body)["error"]
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_feedback_rejects_non_string_fields(tmp_path):
+    httpd, port = start(tmp_path)
+    try:
+        request(port, "POST", "/ask", {"question": "How big is the button?"})
+        status, body, _ = request(port, "POST", "/feedback", {"vote": 1, "note": "x"})
+        assert status == 400
+        assert "strings" in json.loads(body)["error"]
+        status, _, _ = request(port, "POST", "/feedback", {"vote": "sideways"})
+        assert status == 400
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_desk_live_path_skips_cache_then_restores_it(tmp_path, monkeypatch):
+    class Parts:
+        cache = object()
+
+    parts = Parts()
+    seen = {}
+
+    def fake_answer(question, components, options):
+        seen["question"] = question
+        seen["cache"] = components.cache
+        return sample(question)
+
+    monkeypatch.setattr("rag.pipeline.answer", fake_answer)
+    monkeypatch.setattr("rag.pipeline.build_components", lambda: parts)
+    payload = Desk(state_dir=tmp_path).ask("how big?", no_cache=True)
+    assert seen["question"] == "how big?"
+    assert seen["cache"] is None
+    assert parts.cache is not None
+    assert payload["kind"] == "lookup"
+
+
+def test_main_parses_flags_and_help(monkeypatch, capsys):
+    seen = {}
+
+    def fake_serve(host, port):
+        seen["host"] = host
+        seen["port"] = port
+
+    monkeypatch.setattr("rag.server.serve", fake_serve)
+    assert main(["--host", "0.0.0.0", "--port", "9"]) == 0
+    assert seen == {"host": "0.0.0.0", "port": 9}
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    assert "port" in capsys.readouterr().out

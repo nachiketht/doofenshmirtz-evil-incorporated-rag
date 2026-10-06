@@ -80,6 +80,17 @@ def test_build_reranker_kinds(monkeypatch):
         build_reranker("magic")
 
 
+def test_cohere_is_skipped_when_the_key_is_missing(tmp_path, monkeypatch):
+    from rag.rerankers import _cohere
+
+    monkeypatch.delenv("COHERE_API_KEY", raising=False)
+    assert _cohere(str(tmp_path / "none.env")) is None
+    local = LocalCrossEncoderReranker(scorer=length_scorer)
+    monkeypatch.setattr("rag.rerankers._cohere", lambda env_path=".env": None)
+    stacked = build_reranker("cohere", local=local)
+    assert stacked.rerank("q", ["a", "bb"]) == ["bb", "a"]
+
+
 def test_cohere_adapter_reports_search_cost():
     def post_scored(api_key, model, question, documents):
         return [(documents[1], 0.9), (documents[0], 0.2)]

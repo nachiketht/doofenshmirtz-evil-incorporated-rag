@@ -1,3 +1,5 @@
+import pytest
+
 from rag.extract import HeuristicExtractor, LLMExtractor, apply, build_extractor
 
 
@@ -48,3 +50,15 @@ def test_apply_writes_flat_metadata_and_builder():
     assert "shrink-inator" in records[0]["entities"]
     assert build_extractor("heuristic").name == "heuristic"
     assert build_extractor("llm", model=Model("{}")).name == "llm"
+
+
+def test_llm_extractor_defaults_to_the_route_model(monkeypatch):
+    monkeypatch.setattr(
+        "adapter.generation_adapter.GenerationAdapter",
+        lambda model=None: Model("{}"),
+    )
+    built = build_extractor("llm")
+    assert built.name == "llm"
+    assert isinstance(built.model, Model)
+    with pytest.raises(ValueError, match="unknown RAG_METADATA_EXTRACTOR"):
+        build_extractor("magic")

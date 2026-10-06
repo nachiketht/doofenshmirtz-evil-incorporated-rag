@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from adapter.rerank_adapter import RerankerAdapter, post_rerank
+from adapter.rerank_adapter import RerankerAdapter, post_rerank, post_rerank_scored
 
 
 def test_adapter_returns_ranked_documents(monkeypatch):
@@ -84,3 +84,32 @@ def test_post_rerank_orders_by_relevance(monkeypatch):
         "cake",
         "vacation",
     ]
+
+
+def test_post_rerank_scored_keeps_relevance(monkeypatch):
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "results": [
+                        {"index": 0, "relevance_score": 0.1},
+                        {"index": 1, "relevance_score": 0.9},
+                    ]
+                }
+            ).encode()
+
+    def opener(request):
+        assert request.full_url == "https://api.cohere.com/v2/rerank"
+        assert request.get_header("Authorization") == "Bearer secret"
+        return Response()
+
+    assert post_rerank_scored(
+        "secret", "rerank-v3.5", "cake", ["vacation", "cake"], opener=opener
+    ) == [("cake", 0.9), ("vacation", 0.1)]
+    assert RerankerAdapter(api_key="secret").rerank_scored("q", []) == []

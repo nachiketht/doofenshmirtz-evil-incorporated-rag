@@ -1,5 +1,6 @@
 from rag.algorithms import (
     compare_targets,
+    cosine,
     lost_in_the_middle,
     mentioned_date,
     mentioned_versions,
@@ -7,6 +8,14 @@ from rag.algorithms import (
     parse_queries,
     rrf,
 )
+
+
+def test_cosine_returns_zero_for_empty_or_mismatched_vectors():
+    assert cosine([], [1.0]) == 0.0
+    assert cosine([1.0], []) == 0.0
+    assert cosine([1.0], [1.0, 0.0]) == 0.0
+    assert cosine([0.0, 0.0], [1.0, 0.0]) == 0.0
+    assert cosine([1.0, 0.0], [1.0, 0.0]) == 1.0
 
 
 def test_rrf_rewards_agreement_across_rankings():

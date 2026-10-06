@@ -3,7 +3,18 @@ import sys
 
 from adapter.database_adapter import DatabaseAdapter
 from rag.logutil import disable_question_log, enable_question_log, stage
-from rag.retrieve import apply_rerank, bm25_scores, cosine, fuse, main, retrieve
+from rag.retrieve import (
+    apply_rerank,
+    bm25_scores,
+    catalog,
+    cosine,
+    fuse,
+    hybrid,
+    main,
+    pair_hits,
+    rerank_items,
+    retrieve,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -302,6 +313,41 @@ def test_unknown_rerank_text_is_ignored():
             return ["missing"]
 
     assert apply_rerank("cake", [{"id": "a"}], ["cake"], Drop(), 3) == [{"id": "a"}]
+
+
+def test_hybrid_and_rerank_skip_empty_inputs():
+    assert hybrid("cake", [1.0, 0.0], []) == []
+    assert apply_rerank("cake", [], [], FakeReranker(), 3) == []
+    assert rerank_items("cake", [], [], FakeReranker()) == []
+
+
+def test_rerank_items_without_scored_method():
+    items = [{"id": "a"}, {"id": "b"}]
+    ordered = rerank_items("cake", items, ["a", "b"], FakeReranker(reverse=True))
+    assert [item["id"] for item in ordered] == ["b", "a"]
+
+
+def test_pair_hits_skips_duplicate_headings():
+    current = record("HR Policy", "2.0", "3. Leave", "new leave")
+    extra = record("HR Policy", "2.0", "3. Leave", "also leave")
+    extra["id"] = "HR Policy|2.0|3. Leave|extra"
+    previous = record("HR Policy", "1.0", "3. Leave", "old leave")
+    current["score"] = extra["score"] = previous["score"] = 1.0
+    pairs = pair_hits([current, extra], [previous])
+    assert len(pairs) == 1
+    assert pairs[0]["current"]["id"] == current["id"]
+    assert pairs[0]["previous"]["id"] == previous["id"]
+
+
+def test_catalog_groups_versions_per_policy():
+    rows = [
+        record("HR Policy", "2.0", "1. A", "a"),
+        record("HR Policy", "1.0", "1. A", "b"),
+        record("Lab Policy", "1.0", "1. A", "c"),
+    ]
+    grouped = catalog(rows)
+    assert grouped["HR Policy"] == ("1.0", "2.0")
+    assert grouped["Lab Policy"] == ("1.0",)
 
 
 def test_main_prints_the_answer(monkeypatch, capsys):

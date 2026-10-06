@@ -63,6 +63,8 @@ def test_empty_directory_errors(tmp_path):
     database = DatabaseAdapter(tmp_path / "chroma")
     with pytest.raises(ValueError, match="no policy files"):
         ingest(tmp_path, embedder, database)
+    with pytest.raises(ValueError, match="missing directory"):
+        ingest(tmp_path / "missing", embedder, database)
 
 
 def test_validation_failure_stores_nothing(tmp_path, caplog):
