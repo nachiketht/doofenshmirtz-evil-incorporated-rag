@@ -9,7 +9,9 @@ For every contract-named file in ``docs/`` (PDF, DOCX, Markdown):
 2. Otherwise read, chunk, enrich with manifest metadata and validate. Any
    validation error aborts the whole run before anything is written.
 3. Delete that document's *own* old chunks (same policy + version), then
-   embed and upsert the new ones. Other versions are never touched.
+   embed and upsert the new ones. A failed write is retried twice. Other
+   versions are never touched. The embedding model name is part of the file
+   hash, so changing models re-embeds.
 4. Recompute lifecycle flags for the catalog: ``is_latest`` (newest *active*
    version per policy) and ``effective_to`` (next version's start date).
 5. Drop any stored document whose file is no longer in the directory, and
@@ -39,6 +41,7 @@ from rag.validate import validate
 SUFFIXES = SUPPORTED
 EMBED_BATCH = 64
 STRATEGY = "structural"
+WRITE_RETRIES = 2
 SYNCED_FIELDS = (
     "department",
     "doc_type",
@@ -48,6 +51,27 @@ SYNCED_FIELDS = (
     "effective_from",
     "effective_from_num",
 )
+
+
+def embed_model_name(embedder) -> str:
+    return str(getattr(embedder, "model", None) or getattr(embedder, "name", "") or "")
+
+
+def call_with_retries(action, label: str, retries: int = WRITE_RETRIES):
+    """Run a store write, then retry it up to ``retries`` more times."""
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            return action()
+        except Exception as exc:
+            last = exc
+            log(
+                "ingest",
+                f"{label} attempt={attempt + 1} error={type(exc).__name__}",
+            )
+            if attempt == retries:
+                raise
+    raise last
 
 
 def file_hash(path: Path, strategy: str) -> str:
@@ -156,7 +180,7 @@ def ingest(
         chunk_file = make_chunk_file(strategy)
     strategy = getattr(chunk_file, "strategy", strategy)
     extractor = extractor or HeuristicExtractor()
-    hash_key = f"{strategy}|{extractor.name}"
+    hash_key = f"{strategy}|{extractor.name}|{embed_model_name(embedder)}"
     store_tag = getattr(database, "ingest_tag", "")
     if store_tag:
         hash_key = f"{hash_key}|{store_tag}"
@@ -221,7 +245,7 @@ def ingest(
             f"metadata policy={policy} version={version} keys={sorted(changes)}",
         )
 
-    for policy, version, records, vectors, fields in embedded:
+    def write_document(policy, version, records, vectors, fields):
         removed = database.delete_document(policy, version)
         for start in range(0, len(records), EMBED_BATCH):
             database.upsert(
@@ -241,6 +265,15 @@ def ingest(
                 **{k: v for k, v in fields.items() if v is not None},
             }
         )
+        return removed
+
+    for policy, version, records, vectors, fields in embedded:
+        removed = call_with_retries(
+            lambda policy=policy, version=version, records=records, vectors=vectors, fields=fields: (
+                write_document(policy, version, records, vectors, fields)
+            ),
+            f"write policy={policy} version={version}",
+        )
         log(
             "ingest",
             f"stored policy={policy} version={version} chunks={len(records)} "
@@ -250,7 +283,12 @@ def ingest(
     on_disk = {policy_and_version(path) for path in files}
     removed_missing = []
     for policy, version in sorted(set(stored) - on_disk):
-        count = database.delete_document(policy, version)
+        count = call_with_retries(
+            lambda policy=policy, version=version: database.delete_document(
+                policy, version
+            ),
+            f"remove policy={policy} version={version}",
+        )
         removed_missing.append((policy, version, count))
         log(
             "ingest",

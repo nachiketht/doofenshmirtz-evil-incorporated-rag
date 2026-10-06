@@ -4,16 +4,15 @@ import sys
 from adapter.database_adapter import DatabaseAdapter
 from rag.logutil import disable_question_log, enable_question_log, stage
 from rag.retrieve import (
+    RetrievalOptions,
     apply_rerank,
     bm25_scores,
-    catalog,
     cosine,
-    fuse,
-    hybrid,
     main,
     pair_hits,
     rerank_items,
     retrieve,
+    versions_by_policy,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -103,22 +102,27 @@ def test_cosine_handles_empty_and_mismatched_vectors():
     assert cosine([1.0, 0.0], [1.0, 0.0]) == 1.0
 
 
-def test_fuse_breaks_ties_by_id():
-    rows = [{"id": "b", "text": "cake"}, {"id": "a", "text": "cake"}]
-    fused = fuse(rows, [1.0, 1.0], [1.0, 1.0])
-    assert [hit["id"] for hit in fused] == ["a", "b"]
-
-
-def test_keyword_hit_outranks_the_closer_distractor():
+def test_keyword_hit_survives_when_dense_search_misses_it(tmp_path):
     rows = [
-        {"id": "close", "text": "vacation days"},
-        {"id": "mid", "text": "office hours"},
-        {"id": "other", "text": "parking"},
-        {"id": "cake", "text": "birthday cake"},
+        record("HR Policy", "2.0", "1. Purpose", "vacation days"),
+        record("HR Policy", "2.0", "3. Leave", "birthday cake for the pod"),
     ]
-    keyword = bm25_scores("cake", [row["text"] for row in rows])
-    fused = fuse(rows, [0.4, 0.3, 0.2, 0.35], keyword)
-    assert fused[0]["id"] == "cake"
+
+    class DenseMiss(DatabaseAdapter):
+        def query(self, vector, n, where=None):
+            return super().query(vector, n, where)[:1]
+
+    database = DenseMiss(tmp_path / "chroma")
+    database.upsert(rows, [[1.0, 0.0], [0.0, 1.0]])
+    found = retrieve(
+        "cake",
+        FakeEmbedder([1.0, 0.0]),
+        FakeModel(['{"kind":"lookup","policy":"HR Policy","version":"2.0"}']),
+        database,
+        FakeReranker(),
+        options=RetrievalOptions(top_n=2),
+    )
+    assert any("cake" in hit["text"] for hit in found["hits"])
 
 
 def test_lookup_drops_older_versions(tmp_path):
@@ -224,6 +228,44 @@ def test_compare_pairs_current_and_previous(tmp_path):
     assert by_heading["9. Only Old"]["current"] is None
 
 
+def test_compare_with_nothing_retrieved_is_not_found(tmp_path):
+    rows = [record("HR Policy", "2.0", "3. Leave", "birthday cake")]
+    found = retrieve(
+        "cake",
+        FakeEmbedder([1.0, 0.0]),
+        FakeModel(['{"kind":"compare","policy":"HR Policy","version":""}']),
+        store(tmp_path / "empty-compare", rows, [[1.0, 0.0]]),
+        FakeReranker(),
+        options=RetrievalOptions(filters={"department": "Nope"}),
+    )
+    assert found["kind"] == "not_found"
+    assert found["hits"] == []
+
+
+def test_lookup_can_target_two_policies(tmp_path):
+    rows = [
+        record("HR Policy", "2.0", "3. Leave", "birthday cake"),
+        record("Travel Policy", "1.0", "1. Blimps", "birthday cake on a blimp"),
+        record("Health Policy", "1.0", "1. Purpose", "birthday cake is unhealthy"),
+    ]
+    found = retrieve(
+        "cake",
+        FakeEmbedder([1.0, 0.0]),
+        FakeModel(
+            [
+                (
+                    '{"kind":"lookup","policy":"","version":"","policies":'
+                    '["HR Policy","Travel Policy"]}'
+                )
+            ]
+        ),
+        store(tmp_path / "two", rows, [[1.0, 0.0], [0.2, 0.8], [0.0, 1.0]]),
+        FakeReranker(),
+    )
+    assert {hit["policy"] for hit in found["hits"]} <= {"HR Policy", "Travel Policy"}
+    assert found["hits"]
+
+
 def test_compare_with_one_version_has_no_previous_side(tmp_path):
     rows = [record("Health & Wellness Policy", "1.0", "1. Purpose", "rest")]
     found, _prompts, _documents = ask(
@@ -274,14 +316,15 @@ def test_reranker_order_reaches_the_answer(tmp_path):
         record("HR Policy", "2.0", "1. Purpose", "vacation days"),
         record("HR Policy", "2.0", "3. Leave", "birthday cake"),
     ]
-    found, _prompts, _documents = ask(
-        tmp_path,
-        rows,
-        [[1.0, 0.0], [0.0, 1.0]],
-        ['{"kind":"lookup","policy":"HR Policy","version":"2.0"}'],
-        reverse=True,
+    vectors = [[1.0, 0.0], [0.0, 1.0]]
+    route = ['{"kind":"lookup","policy":"HR Policy","version":"2.0"}']
+    forward, _prompts, _documents = ask(tmp_path, rows, vectors, route)
+    backward, _prompts, _documents = ask(
+        tmp_path / "reversed", rows, vectors, route, reverse=True
     )
-    assert [hit["text"] for hit in found["hits"]] == ["birthday cake", "vacation days"]
+    assert [hit["text"] for hit in backward["hits"]] == list(
+        reversed([hit["text"] for hit in forward["hits"]])
+    )
 
 
 def test_partial_rerank_keeps_the_remaining_chunks(tmp_path):
@@ -315,8 +358,7 @@ def test_unknown_rerank_text_is_ignored():
     assert apply_rerank("cake", [{"id": "a"}], ["cake"], Drop(), 3) == [{"id": "a"}]
 
 
-def test_hybrid_and_rerank_skip_empty_inputs():
-    assert hybrid("cake", [1.0, 0.0], []) == []
+def test_rerank_skips_empty_inputs():
     assert apply_rerank("cake", [], [], FakeReranker(), 3) == []
     assert rerank_items("cake", [], [], FakeReranker()) == []
 
@@ -345,7 +387,7 @@ def test_catalog_groups_versions_per_policy():
         record("HR Policy", "1.0", "1. A", "b"),
         record("Lab Policy", "1.0", "1. A", "c"),
     ]
-    grouped = catalog(rows)
+    grouped = versions_by_policy(rows, active_only=False)
     assert grouped["HR Policy"] == ("1.0", "2.0")
     assert grouped["Lab Policy"] == ("1.0",)
 

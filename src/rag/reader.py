@@ -61,14 +61,60 @@ def _load_text(path: Path) -> str:
     return "\n".join((doc.text or "") for doc in documents).strip()
 
 
+def is_section_title(rest: str) -> bool:
+    """A short title, not a numbered sentence such as ``1. Sign the log.``."""
+    rest = rest.strip()
+    title = rest.split(". ", 1)[0] if ". " in rest else rest
+    if not title or title.endswith((".", "!", "?")):
+        return False
+    return 0 < len(title.split()) <= 12
+
+
+def prose_preamble(lines: list[str]) -> str:
+    """Body text before the first heading. Titles and banners are left out."""
+    kept = []
+    for line in lines:
+        if "TOP SECRET" in line.upper() or "TOP-SECRET" in line.upper():
+            continue
+        words = line.split()
+        if len(words) > 12 or (line.endswith((".", "!", "?")) and len(words) > 8):
+            kept.append(line)
+    return " ".join(kept)
+
+
+def heading_match(line: str):
+    match = SUBSECTION.match(line)
+    if match:
+        return match
+    match = SECTION.match(line)
+    if match and is_section_title(match.group(2)):
+        return match
+    return None
+
+
 def blocks_from_lines(lines: list[str]) -> list[dict]:
     blocks: list[dict] = []
+    pending: list[str] = []
+    started = False
     for raw in lines:
         line = " ".join(raw.split())
         if not line:
             continue
-        match = SUBSECTION.match(line) or SECTION.match(line)
+        match = heading_match(line)
         if match:
+            if not started:
+                preamble = prose_preamble(pending)
+                if preamble:
+                    blocks.append(
+                        {
+                            "level": 1,
+                            "heading": "Preamble",
+                            "text": preamble,
+                            "raw_lines": [preamble],
+                        }
+                    )
+                started = True
+                pending = []
             number, rest = match.group(1), match.group(2)
             if ". " in rest:
                 title, body = rest.split(". ", 1)
@@ -83,9 +129,22 @@ def blocks_from_lines(lines: list[str]) -> list[dict]:
                     "raw_lines": [body] if body else [],
                 }
             )
-        elif blocks:
+        elif started:
             blocks[-1]["text"] = f"{blocks[-1]['text']} {line}".strip()
             blocks[-1].setdefault("raw_lines", []).append(raw.rstrip())
+        else:
+            pending.append(line)
+    if not started:
+        preamble = prose_preamble(pending)
+        if preamble:
+            blocks.append(
+                {
+                    "level": 1,
+                    "heading": "Preamble",
+                    "text": preamble,
+                    "raw_lines": [preamble],
+                }
+            )
     return blocks
 
 
@@ -96,7 +155,7 @@ def title_lines(lines: list[str]) -> list[str]:
         line = " ".join(raw.split())
         if not line:
             continue
-        if SUBSECTION.match(line) or SECTION.match(line):
+        if heading_match(line):
             break
         found.append(line)
     return found

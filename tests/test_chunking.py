@@ -73,6 +73,26 @@ def test_structural_keeps_the_baseline_ids_and_text(path):
     assert {r["strategy"] for r in new} == {"structural"}
 
 
+def test_structural_keeps_parent_text_for_expansion_and_indexes_a_section_body():
+    records = chunk_blocks(BLOCKS, "P", "1.0", "p.md", "structural")
+    child = next(r for r in records if r["heading_path"].endswith("2.1 Placement"))
+    assert "2.2 Labeling" in child["parent_text"]
+    intro = [
+        {"level": 1, "heading": "1. Purpose", "text": "Read this before the rules."},
+        {"level": 2, "heading": "1.1 Rule", "text": "No capes."},
+    ]
+    embedded_ids = {
+        record["id"]: record
+        for record in chunk_blocks(intro, "P", "1.0", "p.md", "structural")
+        if record["embed"]
+    }
+    assert embedded_ids["P|1.0|1. Purpose"]["text"] == "Read this before the rules."
+    assert (
+        "Read this before the rules."
+        in embedded_ids["P|1.0|1. Purpose > 1.1 Rule"]["parent_text"]
+    )
+
+
 def test_structural_caps_oversized_leaves_with_numbered_parts():
     long_text = " ".join(f"Sentence number {n} about inators." for n in range(60))
     blocks = [{"level": 1, "heading": "1. Purpose", "text": long_text}]

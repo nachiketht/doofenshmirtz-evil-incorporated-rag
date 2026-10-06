@@ -14,6 +14,7 @@ fake index instead.
 """
 
 import hashlib
+import json
 import re
 
 from adapter.records import (
@@ -32,6 +33,7 @@ BACKEND = "pinecone"
 BATCH = 100
 SLUG = re.compile(r"[^a-z0-9]+")
 REGISTRY_SUFFIX = "__documents"
+METADATA_BYTES = 40_000
 
 
 def pinecone_api_key(path=".env") -> str:
@@ -52,6 +54,30 @@ def doc_prefix(policy: str, version: str) -> str:
 def vector_id(record_id: str, policy: str, version: str) -> str:
     digest = hashlib.sha1(record_id.encode("utf-8")).hexdigest()
     return f"{doc_prefix(policy, version)}{digest}"
+
+
+def fit_metadata(meta: dict) -> dict:
+    """Keep a Pinecone metadata payload under the per-record size limit.
+
+    Chunk text has to live in metadata. ``parent_text`` is dropped first, then
+    the chunk text is shortened, so an oversized section does not fail the write.
+    """
+    fitted = dict(meta)
+
+    def size() -> int:
+        return len(json.dumps(fitted).encode())
+
+    if size() <= METADATA_BYTES:
+        return fitted
+    if isinstance(fitted.get("parent_text"), str):
+        fitted.pop("parent_text")
+        log("database", "pinecone dropped parent_text to fit metadata")
+    text = fitted.get("text")
+    while isinstance(text, str) and size() > METADATA_BYTES and len(text) > 200:
+        text = text[: max(200, len(text) // 2)] + "…"
+        fitted["text"] = text
+        log("database", "pinecone truncated chunk text to fit metadata")
+    return fitted
 
 
 def registry_id(policy: str, version: str) -> str:
@@ -127,9 +153,10 @@ class PineconeDatabaseAdapter:
             self.dimension = len(vectors[0])
         payload = []
         for record, vector in zip(records, vectors, strict=True):
-            meta = to_metadata(record)
+            meta = fit_metadata(to_metadata(record))
             meta["chunk_id"] = record["id"]
             meta["text"] = record["text"]
+            meta = fit_metadata(meta)
             payload.append(
                 {
                     "id": vector_id(record["id"], record["policy"], record["version"]),

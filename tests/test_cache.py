@@ -84,6 +84,44 @@ def test_persistence_round_trip_and_bad_files(tmp_path):
         SemanticCache(max_entries=0)
 
 
+def test_similar_embeddings_still_need_the_same_content_tokens():
+    cache = SemanticCache(threshold=0.95)
+    cache.store(
+        [1.0, 0.0],
+        "default",
+        "c",
+        {"answer": "dog"},
+        question="days of pet leave for a dog",
+    )
+    assert (
+        cache.lookup(
+            [1.0, 0.0], "default", "c", "how many days of pet leave for a dog"
+        )["answer"]
+        == "dog"
+    )
+    assert cache.lookup([1.0, 0.0], "default", "c", "pet leave for a platypus") is None
+    cache.store(
+        [0.0, 1.0],
+        "default",
+        "c",
+        {"answer": "v3"},
+        question="what changed in HR Policy v1 vs v3",
+    )
+    assert (
+        cache.lookup([0.0, 1.0], "default", "c", "what changed in HR Policy v1 vs v2")
+        is None
+    )
+    assert (
+        cache.lookup(
+            [0.0, 1.0],
+            "default",
+            "c",
+            "what changed on 2024-06-01 in HR Policy v1 vs v3",
+        )
+        is None
+    )
+
+
 def test_purge_command_clears_the_cache_file(tmp_path, monkeypatch, capsys):
     from rag.cache import main
 

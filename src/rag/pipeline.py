@@ -119,7 +119,7 @@ def answer(question: str, components: Components, options=None, tracer=None) -> 
         cache = components.cache
         if cache is not None:
             with stage("cache_lookup"):
-                cached = cache.lookup(vector, access.level, key)
+                cached = cache.lookup(vector, access.level, key, access.question)
             if cached is not None:
                 return result(
                     tracer,
@@ -158,6 +158,7 @@ def answer(question: str, components: Components, options=None, tracer=None) -> 
                         "kind": kind,
                         "hits": slim(hits),
                     },
+                    question=access.question,
                 )
     return result(
         tracer,

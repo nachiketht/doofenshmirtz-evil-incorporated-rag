@@ -108,16 +108,6 @@ def keyword_text(row: dict) -> str:
     return row.get("embed_text") or f"{row.get('heading_path', '')}\n{row['text']}"
 
 
-def catalog(rows: list[dict]) -> dict:
-    policies = {}
-    for row in rows:
-        policies.setdefault(row["policy"], set()).add(row["version"])
-    return {
-        name: tuple(sorted(versions, key=version_key))
-        for name, versions in policies.items()
-    }
-
-
 def fold(rows: list[dict]) -> list[dict]:
     """Collapse alias duplicates (same section under two policy names).
 
@@ -149,9 +139,23 @@ def lookup_pairs(policies: dict, policy: str, version: str) -> list[tuple]:
     return [(name, versions[-1]) for name, versions in policies.items()]
 
 
-def candidates(rows: list[dict], pairs: list[tuple]) -> list[dict]:
-    allowed = set(pairs)
-    return [row for row in rows if (row["policy"], row["version"]) in allowed]
+def decision_pairs(policies: dict, decision: dict) -> list[tuple]:
+    """Latest (or named) versions for the policies the router selected.
+
+    An empty policy with a ``policies`` list limits the search to those
+    documents. No names at all searches every latest version.
+    """
+    if not policies:
+        return []
+    if decision.get("policy"):
+        return lookup_pairs(policies, decision["policy"], decision.get("version") or "")
+    named = [name for name in decision.get("policies") or [] if name in policies]
+    if named:
+        pairs = []
+        for name in named:
+            pairs.extend(lookup_pairs(policies, name, ""))
+        return pairs
+    return lookup_pairs(policies, "", "")
 
 
 def cosine(left: list[float], right: list[float]) -> float:
@@ -163,10 +167,6 @@ def cosine(left: list[float], right: list[float]) -> float:
     if left_norm == 0 or right_norm == 0:
         return 0.0
     return dot / (left_norm * right_norm)
-
-
-def cosine_scores(query: list[float], rows: list[dict]) -> list[float]:
-    return [cosine(query, row["vector"]) for row in rows]
 
 
 def bm25_scores(query: str, documents: list[str], k1: float = 1.5, b: float = 0.75):
@@ -201,38 +201,6 @@ def bm25_scores(query: str, documents: list[str], k1: float = 1.5, b: float = 0.
             score += idf * (frequency * (k1 + 1)) / denominator
         scores.append(score)
     return scores
-
-
-def ranks(rows: list[dict], scores: list[float]) -> list[int]:
-    order = sorted(
-        range(len(rows)),
-        key=lambda index: (-scores[index], rows[index]["id"]),
-    )
-    places = [0] * len(rows)
-    for place, index in enumerate(order, start=1):
-        places[index] = place
-    return places
-
-
-def fuse(rows, semantic, keyword, fuse_n=FUSE_N):
-    semantic_rank = ranks(rows, semantic)
-    keyword_rank = ranks(rows, keyword)
-    hits = []
-    for index, row in enumerate(rows):
-        score = 1 / (RRF + semantic_rank[index]) + 1 / (RRF + keyword_rank[index])
-        hits.append({**row, "score": score})
-    hits.sort(key=lambda hit: (-hit["score"], hit["id"]))
-    return hits[:fuse_n]
-
-
-def hybrid(question, query, rows):
-    if not rows:
-        return []
-    return fuse(
-        rows,
-        cosine_scores(query, rows),
-        bm25_scores(question, [row["text"] for row in rows]),
-    )
 
 
 def side(row: dict) -> dict:
@@ -439,31 +407,66 @@ def embed_queries(embedder, queries, vector):
     return vectors
 
 
+def remember(pool: dict[str, dict], row: dict) -> None:
+    """Keep one row per id, preferring a copy that already has its vector."""
+    current = pool.get(row["id"])
+    if current is None:
+        pool[row["id"]] = row
+        return
+    if row.get("vector") and not current.get("vector"):
+        current["vector"] = row["vector"]
+    if "score" not in current and row.get("score") is not None:
+        current["score"] = row["score"]
+
+
+def selectable(rows: list[dict], level: str, options: RetrievalOptions) -> list[dict]:
+    needle = (options.entity or "").lower()
+    found = []
+    for row in fold(rows):
+        if not visible(row, level):
+            continue
+        if needle and needle not in str(row.get("entities", "")).lower():
+            continue
+        found.append(row)
+    return found
+
+
 def search(queries, vectors, database, where, level, options) -> list[dict]:
-    """Dense ANN per query + BM25 per query over the pooled candidates, fused by RRF."""
+    """Dense ANN per query, plus BM25 over every chunk the filter allows.
+
+    Keyword search is not limited to the dense shortlist: a chunk the embedder
+    missed can still be retrieved when its text matches the question.
+    """
     pool: dict[str, dict] = {}
     rankings: list[list[str]] = []
     for query_vector in vectors:
         with stage("retrieve"):
             found = database.query(query_vector, options.candidate_k, where)
-        found = [row for row in fold(found) if visible(row, level)]
-        if options.entity:
-            needle = options.entity.lower()
-            found = [
-                row for row in found if needle in str(row.get("entities", "")).lower()
-            ]
-        rankings.append([row["id"] for row in found])
-        for row in found:
-            pool.setdefault(row["id"], row)
-    rows = fold(list(pool.values()))
-    if not rows:
-        return []
+        dense = selectable(found, level, options)
+        for row in dense:
+            remember(pool, row)
+        if dense:
+            rankings.append([row["id"] for row in dense])
+    corpus = selectable(database.get(where, include_vectors=True), level, options)
     with stage("hybrid"):
-        texts = [keyword_text(row) for row in rows]
+        texts = [keyword_text(row) for row in corpus]
         for query in queries:
+            if not corpus:
+                break
             keyword = bm25_scores(query, texts)
-            order = sorted(range(len(rows)), key=lambda i: (-keyword[i], rows[i]["id"]))
-            rankings.append([rows[i]["id"] for i in order])
+            order = sorted(
+                range(len(corpus)), key=lambda i: (-keyword[i], corpus[i]["id"])
+            )
+            ranked = [i for i in order if keyword[i] > 0][: options.candidate_k]
+            if not ranked:
+                continue
+            rankings.append([corpus[i]["id"] for i in ranked])
+            for index in ranked:
+                remember(pool, corpus[index])
+        rows = fold(list(pool.values()))
+        if not rows:
+            log("retrieve", f"candidates=0 queries={len(queries)}")
+            return []
         scores = rrf(rankings, options.rrf_k)
         fused = sorted(rows, key=lambda row: (-scores.get(row["id"], 0.0), row["id"]))
         fused = [
@@ -592,8 +595,8 @@ def retrieve(
             level,
             options,
         )
-        if meta.get("not_found"):
-            kind = "not_found"
+    if meta.get("not_found"):
+        kind = "not_found"
     log("retrieve", f"kind={kind} hits={len(hits)} top={top_ids(hits)}")
     return {"kind": kind, "hits": hits, "decision": decision, "access": level, **meta}
 
@@ -615,17 +618,16 @@ def lookup(
     as_of = options.as_of or mentioned_date(question)
     if as_of and not decision["version"]:
         forced = lifecycle.in_force(entries, as_of)
+        selected = decision.get("policies") or []
         if decision["policy"]:
-            forced = {k: v for k, v in forced.items() if k == decision["policy"]}
+            selected = [decision["policy"]]
+        if selected:
+            forced = {k: v for k, v in forced.items() if k in selected}
         pairs = sorted(forced.items())
         where = base_filter(level, options, active_only=False)
         log("retrieve", f"as_of={as_of} documents={len(pairs)}")
     else:
-        pairs = (
-            lookup_pairs(active, decision["policy"], decision["version"])
-            if active
-            else []
-        )
+        pairs = decision_pairs(active, decision)
         where = base_filter(level, options, active_only=True)
     if not pairs:
         log("retrieve", "candidates=0")
@@ -707,7 +709,11 @@ def compare(
         ordered = rerank_items(
             question, pairs, [pair_text(pair) for pair in pairs], reranker
         )
-    return ordered[: options.top_n], {"queries": [question], "versions": [older, newer]}
+    hits = ordered[: options.top_n]
+    meta = {"queries": [question], "versions": [older, newer]}
+    if not hits:
+        meta["not_found"] = True
+    return hits, meta
 
 
 def json_hits(hits: list[dict]) -> list[dict]:

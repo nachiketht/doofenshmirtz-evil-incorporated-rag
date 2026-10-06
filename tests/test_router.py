@@ -35,6 +35,32 @@ def test_route_keeps_a_lookup_that_names_an_old_version():
     assert decision == {"kind": "lookup", "policy": "HR Policy", "version": "1.0"}
 
 
+def test_router_reads_json_wrapped_in_a_fence():
+    raw = '```json\n{"kind":"lookup","policy":"HR Policy","version":"1.0"}\n```'
+    assert parse_route(raw, POLICIES) == {
+        "kind": "lookup",
+        "policy": "HR Policy",
+        "version": "1.0",
+    }
+
+
+def test_router_keeps_every_named_policy():
+    raw = json.dumps(
+        {
+            "kind": "lookup",
+            "policy": "",
+            "version": "",
+            "policies": ["HR Policy", "Health & Wellness Policy", "Nope"],
+        }
+    )
+    assert parse_route(raw, POLICIES) == {
+        "kind": "lookup",
+        "policy": "",
+        "version": "",
+        "policies": ["HR Policy", "Health & Wellness Policy"],
+    }
+
+
 @pytest.mark.parametrize(
     "raw",
     [

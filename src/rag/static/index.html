@@ -573,7 +573,8 @@ async function sendVote(vote, note, done, up, down) {
 
 function renderCitations(hits) {
   citations.replaceChildren(h("h2", {}, "Citations"));
-  if (!hits || !hits.length) {
+  hits = (hits || []).filter((hit) => hit.cited !== false);
+  if (!hits.length) {
     citations.append(h("p", { class: "quiet" }, "No section was retrieved for this question."));
     return;
   }

@@ -1,3 +1,5 @@
+from datetime import date
+
 from rag.algorithms import (
     compare_targets,
     cosine,
@@ -65,6 +67,12 @@ def test_compare_targets_honours_any_version_pair():
 
 def test_mentioned_date_and_query_parsing():
     assert mentioned_date("what applied on 2025-03-01?") == "2025-03-01"
+    assert mentioned_date("as of June 1, 2024") == "2024-06-01"
+    assert mentioned_date("as of 1 June 2024") == "2024-06-01"
+    assert mentioned_date("during June 2024") == "2024-06-01"
+    assert mentioned_date("as of last June", today=date(2026, 10, 6)) == "2026-06-01"
+    assert mentioned_date("as of last June", today=date(2026, 3, 1)) == "2025-06-01"
+    assert mentioned_date("as of June 31, 2024") is None
     assert mentioned_date("no date") is None
     assert parse_queries('["a", "b", "a", ""]', 5) == ["a", "b"]
     assert parse_queries('["a", "b", "c"]', 2) == ["a", "b"]

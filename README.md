@@ -158,11 +158,12 @@ python -m rag.chunking stats --strategy table_aware
 * Files must be named `Doofenshmirtz Evil Inc - <Title> v<N.N>.<pdf|docx|md>`.
   `docs/manifest.json` adds department, document type, classification and
   effective dates; a `TOP SECRET` banner always forces top-secret.
-* Ingest is incremental: unchanged files (same bytes, chunker, extractor and
-  Matryoshka setting) are skipped, changed ones replace only their own chunks.
-  Everything is embedded before the first write, so a failed run (e.g. Ollama
-  down) leaves the store untouched. Newer versions automatically supersede
-  older ones (`is_latest`, effective-to dates).
+* Ingest is incremental: unchanged files (same bytes, chunker, extractor,
+  embedding model and Matryoshka setting) are skipped, changed ones replace
+  only their own chunks. Everything is embedded before the first write, so a
+  failed embed leaves the store untouched. Each document write is retried
+  twice. Newer versions automatically supersede older ones (`is_latest`,
+  effective-to dates).
 * A file removed from `docs/` is deleted from the store on the next ingest,
   and the whole semantic cache is cleared. Retired versions that are still on
   disk drop out of normal lookups but stay available for compares; `purge`
@@ -185,7 +186,7 @@ access gate -> embed -> semantic cache -> catalog -> route (lookup/compare)
 | --- | --- | --- |
 | Chunkers: structural, recursive (token budget + overlap), parent-child, contextual (document/section prefix), table-aware | `rag/chunking.py` | `RAG_CHUNKER` |
 | Metadata extraction (clause type, entities; heuristic or LLM) | `rag/extract.py` | `RAG_METADATA_EXTRACTOR` |
-| Hybrid search: dense + BM25 (heading-aware) fused with reciprocal rank fusion | `rag/retrieve.py` | `RAG_CANDIDATE_K`, `RAG_FUSE_N`, `RAG_RRF_K` |
+| Hybrid search: dense ANN plus BM25 over every chunk the filter allows, fused with reciprocal rank fusion | `rag/retrieve.py` | `RAG_CANDIDATE_K`, `RAG_FUSE_N`, `RAG_RRF_K` |
 | Multi-query rewriting, fused with RRF | `rag/retrieve.py` | `RAG_MULTI_QUERY`, `RAG_NUM_QUERIES` |
 | Rerankers: Cohere, local cross-encoder (bge-reranker), ensemble, automatic fallback | `rag/rerankers.py` | `RAG_RERANKER` |
 | Maximal marginal relevance (diversity) | `rag/algorithms.py` | `RAG_MMR`, `RAG_MMR_LAMBDA` |
@@ -200,9 +201,11 @@ access gate -> embed -> semantic cache -> catalog -> route (lookup/compare)
 | Tracing: per-step latency, tokens, cost | `rag/tracing.py` | `RAG_COST_TABLE` |
 
 A cached answer is reused when the new question is at least `RAG_CACHE_THRESHOLD`
-(0.95) cosine-similar, asked at the same access level, and aimed at the same
-corpus fingerprint. Non-restricted answers are stored in `.rag/semantic_cache.json`
-and keep aging from the time they were written, including across process restarts.
+(0.95) cosine-similar, has the same content words, numbers, versions and dates
+(stopwords and word order can differ), was asked at the same access level, and
+is aimed at the same corpus fingerprint. Non-restricted answers are stored in
+`.rag/semantic_cache.json` and keep aging from the time they were written,
+including across process restarts.
 
 ```bash
 python -m rag.cache purge

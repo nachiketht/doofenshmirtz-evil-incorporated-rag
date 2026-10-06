@@ -60,6 +60,13 @@ def sections_from_blocks(blocks: list[dict]) -> list[dict]:
     return sections
 
 
+def parent_section_text(heading: str, section: dict) -> str:
+    """Whole section, so generation can expand a leaf from any chunker."""
+    if not section["children"]:
+        return ""
+    return f"{heading}\n{section_text(section)}"
+
+
 def section_text(section: dict) -> str:
     parts = [section["block"]["text"]] if section["block"]["text"] else []
     for child in section["children"]:
@@ -174,6 +181,7 @@ def structural(blocks, policy, version, source, *, max_tokens=DEFAULT_MAX_TOKENS
     for section in sections:
         if section["children"]:
             heading = section["block"]["heading"]
+            body = section["block"]["text"]
             records.append(
                 _record(
                     policy,
@@ -182,15 +190,17 @@ def structural(blocks, policy, version, source, *, max_tokens=DEFAULT_MAX_TOKENS
                     heading,
                     heading,
                     document_id,
-                    section["block"]["text"],
-                    False,
+                    body,
+                    bool(body.strip()),
                 )
             )
-    for block, heading, path, parent, _section in leaves(sections, policy, version):
+    for block, heading, path, parent, section in leaves(sections, policy, version):
+        parent_text = parent_section_text(heading, section)
         for part in split_to_fit(block["text"], max_tokens) or [""]:
-            records.append(
-                _record(policy, version, source, heading, path, parent, part, True)
-            )
+            record = _record(policy, version, source, heading, path, parent, part, True)
+            if parent_text:
+                record["parent_text"] = parent_text
+            records.append(record)
     return _finish(records, "structural", source)
 
 
@@ -209,12 +219,14 @@ def recursive(
     for section in sections_from_blocks(blocks):
         heading = section["block"]["heading"]
         text = section_text(section)
+        parent_text = parent_section_text(heading, section)
         for piece in recursive_split(text, max_tokens, overlap) if text else []:
-            records.append(
-                _record(
-                    policy, version, source, heading, heading, document_id, piece, True
-                )
+            record = _record(
+                policy, version, source, heading, heading, document_id, piece, True
             )
+            if parent_text:
+                record["parent_text"] = parent_text
+            records.append(record)
     return _finish(records, "recursive", source)
 
 
@@ -258,9 +270,12 @@ def contextual(
     title = context.get("title") or f"{policy} v{version}"
     department = context.get("department")
     records = []
-    for block, heading, path, parent, _section in leaves(sections, policy, version):
+    for block, heading, path, parent, section in leaves(sections, policy, version):
+        parent_text = parent_section_text(heading, section)
         for part in split_to_fit(block["text"], max_tokens) or [""]:
             record = _record(policy, version, source, heading, path, parent, part, True)
+            if parent_text:
+                record["parent_text"] = parent_text
             lines = [f"Document: {title} ({policy} v{version})"]
             if department:
                 lines.append(f"Department: {department}")
@@ -314,27 +329,34 @@ def _segments(raw_lines: list[str]) -> list[tuple[str, list[str]]]:
 def table_aware(blocks, policy, version, source, *, max_tokens=DEFAULT_MAX_TOKENS, **_):
     records = []
     sections = sections_from_blocks(blocks)
-    for block, heading, path, parent, _section in leaves(sections, policy, version):
+    for block, heading, path, parent, section in leaves(sections, policy, version):
+        parent_text = parent_section_text(heading, section)
         segments = _segments(block.get("raw_lines") or [])
         if not any(kind != "text" for kind, _lines in segments):
             for part in split_to_fit(block["text"], max_tokens) or [""]:
-                records.append(
-                    _record(policy, version, source, heading, path, parent, part, True)
+                record = _record(
+                    policy, version, source, heading, path, parent, part, True
                 )
+                if parent_text:
+                    record["parent_text"] = parent_text
+                records.append(record)
             continue
         for kind, lines in segments:
             if kind == "text":
                 text = " ".join(" ".join(line.split()) for line in lines)
                 for part in split_to_fit(text, max_tokens):
-                    records.append(
-                        _record(
-                            policy, version, source, heading, path, parent, part, True
-                        )
+                    record = _record(
+                        policy, version, source, heading, path, parent, part, True
                     )
+                    if parent_text:
+                        record["parent_text"] = parent_text
+                    records.append(record)
                 continue
             text = "\n".join(line.strip() for line in lines)
             record = _record(policy, version, source, heading, path, parent, text, True)
             record["content_type"] = kind
+            if parent_text:
+                record["parent_text"] = parent_text
             records.append(record)
     return _finish(records, "table_aware", source)
 

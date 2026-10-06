@@ -3,6 +3,7 @@
 import json
 import math
 import re
+from datetime import UTC, date, datetime
 
 from rag.version import normalize_version, version_key
 
@@ -105,11 +106,67 @@ def compare_targets(question: str, versions) -> tuple[str | None, str | None]:
 
 
 ISO_DATE = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
+MONTHS = {
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+}
+MONTH_THEN_DAY = re.compile(r"\b([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d\d)\b")
+DAY_THEN_MONTH = re.compile(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(20\d\d)\b")
+MONTH_AND_YEAR = re.compile(r"\b([A-Za-z]+)\s+(20\d\d)\b")
+LAST_MONTH = re.compile(r"\blast\s+([A-Za-z]+)\b", re.IGNORECASE)
 
 
-def mentioned_date(question: str) -> str | None:
-    match = ISO_DATE.search(question or "")
-    return match.group(1) if match else None
+def _month(name: str) -> int | None:
+    return MONTHS.get(name.lower())
+
+
+def _iso(year: int, month: int, day: int) -> str | None:
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
+def mentioned_date(question: str, today: date | None = None) -> str | None:
+    """The day a point-in-time question is asking about, or None.
+
+    Accepts an ISO day, "June 1, 2024", "1 June 2024", "June 2024" (the first
+    of that month) and "last June" (the most recent June before today).
+    """
+    text = question or ""
+    match = ISO_DATE.search(text)
+    if match:
+        return match.group(1)
+    match = MONTH_THEN_DAY.search(text)
+    if match and _month(match.group(1)):
+        found = _iso(int(match.group(3)), _month(match.group(1)), int(match.group(2)))
+        if found:
+            return found
+    match = DAY_THEN_MONTH.search(text)
+    if match and _month(match.group(2)):
+        found = _iso(int(match.group(3)), _month(match.group(2)), int(match.group(1)))
+        if found:
+            return found
+    match = MONTH_AND_YEAR.search(text)
+    if match and _month(match.group(1)):
+        return _iso(int(match.group(2)), _month(match.group(1)), 1)
+    match = LAST_MONTH.search(text)
+    month = _month(match.group(1)) if match else None
+    if month:
+        today = today or datetime.now(UTC).date()
+        year = today.year if today.month > month else today.year - 1
+        return _iso(year, month, 1)
+    return None
 
 
 REWRITE_PROMPT = """Rewrite the question into {count} different search queries for a \

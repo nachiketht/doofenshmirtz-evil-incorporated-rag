@@ -6,8 +6,10 @@ from fakes import FakePineconeIndex
 from adapter.database_adapter import DatabaseAdapter
 from adapter.factory import open_database
 from adapter.pinecone_adapter import (
+    METADATA_BYTES,
     PineconeDatabaseAdapter,
     connect_index,
+    fit_metadata,
     pinecone_api_key,
     vector_id,
 )
@@ -413,3 +415,13 @@ def test_connect_index_creates_a_missing_index(monkeypatch):
     assert created["opened"] == "evil"
     with pytest.raises(ValueError, match="dimension"):
         connect_index("k", "evil", None, "aws", "us-east-1")
+
+
+def test_oversized_pinecone_metadata_drops_parent_text_then_shortens_the_chunk():
+    small = {"text": "cake", "parent_text": "section"}
+    assert fit_metadata(small) == small
+    huge = "x" * (METADATA_BYTES + 500)
+    fitted = fit_metadata({"text": huge, "parent_text": huge, "policy": "HR"})
+    assert "parent_text" not in fitted
+    assert len(fitted["text"]) < len(huge)
+    assert fitted["policy"] == "HR"

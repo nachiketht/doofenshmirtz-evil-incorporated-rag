@@ -362,9 +362,46 @@ def test_purge_clears_the_whole_cache(docs, database):
     cache = SemanticCache(path=docs.parent / "purge-cache.json")
     cache.store([1.0, 0.0], "default", "corpus", {"answer": "old"})
     cache.store([0.0, 1.0], "restricted", "corpus", {"answer": "secret"})
-    assert admin.main(
-        ["purge", "Inator Safety Policy", "1.0", "--yes"], database, cache
-    ) == 0
+    assert (
+        admin.main(["purge", "Inator Safety Policy", "1.0", "--yes"], database, cache)
+        == 0
+    )
     assert set(catalog(database)) == {("Inator Safety Policy", "2.0")}
     assert len(cache) == 0
     assert "secret" not in cache.path.read_text()
+
+
+def test_changing_the_embedding_model_reembeds(docs, database):
+    write(docs, "1.0", V1)
+    first = CountingEmbedder()
+    first.model = "model-a"
+    ingest(docs, first, database)
+    assert first.texts
+    second = CountingEmbedder()
+    second.model = "model-a"
+    ingest(docs, second, database)
+    assert second.texts == []
+    third = CountingEmbedder()
+    third.model = "model-b"
+    ingest(docs, third, database)
+    assert third.texts == first.texts
+
+
+def test_a_failed_write_is_retried_twice(docs, tmp_path):
+    write(docs, "1.0", V1)
+
+    class Flaky(DatabaseAdapter):
+        def __init__(self, path):
+            super().__init__(path)
+            self.failures = 2
+
+        def upsert(self, records, vectors):
+            if self.failures:
+                self.failures -= 1
+                raise RuntimeError("busy")
+            return super().upsert(records, vectors)
+
+    database = Flaky(tmp_path / "flaky")
+    ingest(docs, CountingEmbedder(), database)
+    assert database.count() > 0
+    assert database.failures == 0

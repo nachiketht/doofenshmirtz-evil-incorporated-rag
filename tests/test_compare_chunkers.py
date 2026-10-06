@@ -28,10 +28,16 @@ def test_question_from_flag_positional_and_default():
 
 
 def test_format_table_and_hits():
-    assert mod.step_seconds(
-        [{"step": "retrieve", "latency_s": 0.2}, {"step": "generate", "latency_s": 1.0}],
-        mod.SEARCH_STEPS,
-    ) == 0.2
+    assert (
+        mod.step_seconds(
+            [
+                {"step": "retrieve", "latency_s": 0.2},
+                {"step": "generate", "latency_s": 1.0},
+            ],
+            mod.SEARCH_STEPS,
+        )
+        == 0.2
+    )
     assert mod.top_hit({"hits": []}) == ""
     assert "Self-Destruct" in mod.top_hit(
         {

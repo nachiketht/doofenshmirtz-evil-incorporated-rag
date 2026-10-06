@@ -1,11 +1,13 @@
 """Semantic answer cache with LRU eviction and optional TTL.
 
 A new question reuses a cached answer when its embedding is at least
-``threshold`` cosine-similar to a cached question **and** it was asked at the
-same access level **and** against the same corpus fingerprint (any ingest that
-changes a document invalidates old answers). Restricted answers are therefore
-never served to a default-access question. Entries at ``memory_only_levels``
-(the pipeline passes the restricted level) are never written to disk.
+``threshold`` cosine-similar to a cached question **and** the two questions
+have the same content words, numbers, versions and dates **and** it was asked
+at the same access level **and** against the same corpus fingerprint (any
+ingest that changes a document invalidates old answers). Restricted answers
+are therefore never served to a default-access question. Entries at
+``memory_only_levels`` (the pipeline passes the restricted level) are never
+written to disk.
 
 Bounded by ``max_entries`` (least-recently-used entry evicted first); entries
 older than ``ttl_seconds`` are ignored and purged. Optional JSON persistence.
@@ -17,12 +19,114 @@ RAG_CACHE_THRESHOLD.
 
 import argparse
 import json
+import re
 import time
 from collections import OrderedDict
 from pathlib import Path
 
 from rag.algorithms import cosine
 from rag.logutil import log
+
+# Question words that do not change which fact is being asked. A cached answer
+# is reused only when the two questions share every other token, including
+# numbers, versions and dates.
+STOP = {
+    "a",
+    "an",
+    "the",
+    "of",
+    "for",
+    "to",
+    "in",
+    "on",
+    "at",
+    "by",
+    "and",
+    "or",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "do",
+    "does",
+    "did",
+    "what",
+    "whats",
+    "how",
+    "who",
+    "whom",
+    "when",
+    "where",
+    "which",
+    "why",
+    "many",
+    "much",
+    "with",
+    "from",
+    "about",
+    "into",
+    "that",
+    "this",
+    "these",
+    "those",
+    "it",
+    "its",
+    "as",
+    "if",
+    "than",
+    "then",
+    "so",
+    "not",
+    "no",
+    "yes",
+    "can",
+    "could",
+    "should",
+    "would",
+    "will",
+    "just",
+    "please",
+    "me",
+    "my",
+    "our",
+    "your",
+    "their",
+    "there",
+    "any",
+    "all",
+    "per",
+    "vs",
+    "versus",
+}
+WORD = re.compile(r"[a-z0-9]+(?:\.[0-9]+)?", re.IGNORECASE)
+DATE = re.compile(r"\b20\d\d-\d\d-\d\d\b")
+VERSION = re.compile(r"\bv(?:ersion)?\s*\.?\s*(\d+(?:\.\d+)?)\b", re.IGNORECASE)
+
+
+def content_tokens(question: str) -> frozenset[str]:
+    """Tokens that must match before a similar embedding can reuse an answer."""
+    text = (question or "").lower()
+    tokens = set(DATE.findall(text))
+    for match in VERSION.finditer(text):
+        tokens.add("v" + match.group(1))
+    for word in WORD.findall(text):
+        if any(character.isdigit() for character in word) or word not in STOP:
+            tokens.add(word)
+    return frozenset(tokens)
+
+
+def questions_compatible(asked, stored) -> bool:
+    """True when neither question was recorded, or their content tokens match.
+
+    Callers that predate the guard omit both sides and keep the old behaviour.
+    A stored entry with no question text does not satisfy a real question.
+    """
+    if asked is None and stored is None:
+        return True
+    if not asked or not stored:
+        return False
+    return content_tokens(asked) == content_tokens(stored)
 
 
 class SemanticCache:
@@ -63,13 +167,14 @@ class SemanticCache:
             del self.entries[key]
         return len(stale)
 
-    def lookup(self, vector, access_level: str, corpus_key: str):
+    def lookup(self, vector, access_level: str, corpus_key: str, question=None):
         self.purge_expired()
         best_key, best_score = None, self.threshold
         for key, entry in self.entries.items():
             if (
                 entry["access_level"] != access_level
                 or entry["corpus_key"] != corpus_key
+                or not questions_compatible(question, entry.get("question"))
             ):
                 continue
             score = cosine(vector, entry["vector"])
@@ -84,7 +189,9 @@ class SemanticCache:
         log("cache", f"hit similarity={best_score:.3f}")
         return {**self.entries[best_key]["value"], "similarity": best_score}
 
-    def store(self, vector, access_level: str, corpus_key: str, value: dict) -> None:
+    def store(
+        self, vector, access_level: str, corpus_key: str, value: dict, question=None
+    ) -> None:
         self.purge_expired()
         self._counter += 1
         key = f"{self.clock():.6f}-{self._counter}"
@@ -92,6 +199,7 @@ class SemanticCache:
             "vector": [float(x) for x in vector],
             "access_level": access_level,
             "corpus_key": corpus_key,
+            "question": question,
             "created": self.clock(),
             "value": value,
         }

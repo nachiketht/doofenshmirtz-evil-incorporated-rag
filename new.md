@@ -1,3 +1,5 @@
+> Historical. The current pipeline is described in README.md. This note is not kept in sync with the code.
+
 # Workflow: current RAG structure
 
 This is the pipeline as implemented on `feat/enterprise-upgrade` (`src/rag/pipeline.py`, `src/rag/retrieve.py`, `src/rag/ingest.py`). `ARCHITECTURE-RAG.md` describes the earlier Chroma-only v1.

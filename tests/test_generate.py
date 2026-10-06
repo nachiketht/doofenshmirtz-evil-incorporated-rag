@@ -112,6 +112,30 @@ def test_generate_sends_compare_pairs_including_a_missing_side():
     assert prompt.rstrip().endswith("cake")
 
 
+def test_generate_cites_only_the_passage_the_answer_used():
+    class Quoting:
+        def generate(self, prompt, system=None):
+            return "Employees receive cake on Friday."
+
+    parking = {
+        "policy": "Parking Policy",
+        "version": "1.0",
+        "heading_path": "2. Blimps",
+        "text": "Blimps dock on the roof before sunset.",
+    }
+    cake = {
+        "policy": "HR Policy",
+        "version": "2.0",
+        "heading_path": "3. Leave",
+        "text": "Employees receive cake on Friday.",
+    }
+    text = generate("who gets cake?", "lookup", [parking, cake], Quoting())
+    assert "HR Policy 2.0, 3. Leave" in text
+    assert "Parking Policy" not in text
+    assert parking["cited"] is False
+    assert cake["cited"] is True
+
+
 def test_generate_skips_the_model_when_there_are_no_hits():
     model = RecordingModel()
     assert generate("cake", "lookup", [], model) == EMPTY

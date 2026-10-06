@@ -93,7 +93,7 @@ def test_validation_failure_stores_nothing(tmp_path, caplog):
         entry for entry in caplog.records if "missing field: version" in entry.message
     ]
     assert error == "missing field: version"
-    assert len(failures) == 2
+    assert len(failures) == 1
     assert database.collection.count() == 0
     assert embedder.tasks == []
 

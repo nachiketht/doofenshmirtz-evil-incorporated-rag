@@ -103,7 +103,9 @@ def components_for(path: Path, live: bool) -> Components:
     )
 
 
-def ingest_strategy(docs: Path, path: Path, strategy: str, live: bool, force: bool) -> int:
+def ingest_strategy(
+    docs: Path, path: Path, strategy: str, live: bool, force: bool
+) -> int:
     from adapter.database_adapter import DatabaseAdapter
     from rag.ingest import ingest
     from rag.offline import HashingEmbedder
@@ -121,7 +123,9 @@ def ingest_strategy(docs: Path, path: Path, strategy: str, live: bool, force: bo
     return database.count()
 
 
-def run_question(question: str, components: Components, options: RetrievalOptions) -> dict:
+def run_question(
+    question: str, components: Components, options: RetrievalOptions
+) -> dict:
     result = answer(question, components, options)
     trace = result.get("trace") or []
     total = next(
