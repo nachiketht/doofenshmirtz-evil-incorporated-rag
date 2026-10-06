@@ -52,6 +52,32 @@ USD, models) and a total row. `--json` prints the same data as JSON, and
 `--no-cache` bypasses the semantic cache. Prices come from
 `src/rag/model_costs.json` (local Ollama models cost $0).
 
+## Compare chunkers
+
+Same question through every ready chunker (`structural`, `recursive`,
+`parent_child`, `contextual`, `table_aware`). Prints chunk count, search
+latency, generate latency, total, answer kind, and the top hit. Cache is off.
+Offline (default) uses a hashing embedder and a temp Chroma store per
+strategy. `--live` uses Ollama and the configured reranker but still writes
+**local Chroma**, so Pinecone is not overwritten. Generate usually dominates
+`--live` totals; the search column is the chunker effect.
+
+```bash
+python scripts/compare_chunkers.py
+python scripts/compare_chunkers.py "How big must a self-destruct button be?"
+python scripts/compare_chunkers.py -q "What colour is Agent P?"
+python scripts/compare_chunkers.py --question "How many days of pet leave for a platypus?"
+python scripts/compare_chunkers.py -q "How big must a self-destruct button be?" \
+  --strategy structural --strategy recursive
+python scripts/compare_chunkers.py --live -q "How big must a self-destruct button be?"
+python scripts/compare_chunkers.py --live --keep .rag/chunker-demo --force \
+  -q "How big must a self-destruct button be?"
+```
+
+Pass the query as a positional argument or with `-q` / `--question`. Repeat
+`--strategy` to subset chunkers. `--keep DIR` reuses one Chroma subdir per
+strategy; `--force` re-ingests those stores. `--docs` defaults to `docs/`.
+
 ## Policy desk (HTTP server)
 
 Same pipeline as `python -m rag.trace`, served as a page and a small JSON API.
@@ -127,18 +153,7 @@ answers are kept in memory only (never written to `.rag/`).
 python -m rag.ingest [docs] [chroma] [--force] [--chunker contextual]
 python -m rag.admin list | retire POLICY VERSION | restore POLICY VERSION | purge POLICY VERSION --yes
 python -m rag.chunking stats --strategy table_aware
-python scripts/compare_chunkers.py "How big must a self-destruct button be?"
-python scripts/compare_chunkers.py -q "What colour is Agent P?" --strategy recursive --strategy structural
 ```
-
-`compare_chunkers.py` runs the same question through each ready chunker and
-prints search vs generate latency. Pass the query as a positional argument or
-with `-q` / `--question`. Offline (default) uses a hashing embedder and a
-temp Chroma store per strategy. `--live` uses Ollama and the configured
-reranker but still writes **local Chroma**, so Pinecone is not overwritten.
-`--keep DIR` reuses those stores; `--force` re-ingests them. Cache is off.
-Generate usually dominates `--live` totals; the search column is the chunker
-effect.
 
 * Files must be named `Doofenshmirtz Evil Inc - <Title> v<N.N>.<pdf|docx|md>`.
   `docs/manifest.json` adds department, document type, classification and
