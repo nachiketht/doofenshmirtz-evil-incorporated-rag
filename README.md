@@ -243,7 +243,16 @@ chunks is redacted.
 env -u OLLAMA_HOST pytest                  # unit + integration, no network
 python scripts/run_eval.py                 # offline eval: hashing embedder, heuristic router
 python scripts/run_eval.py --live          # live eval: Ollama + Cohere, writes results/result.json
+ollama pull gemma3:27b                    # judge only; larger than the gemma3:12b answerer
+python scripts/run_eval.py --judge         # offline answers, then local judge
+python scripts/run_eval.py --live --judge  # Ollama answers, then local judge
 ```
+
+`--judge` asks local `gemma3:27b` through Ollama whether the generated prose
+answers the question. It does not see the retrieved passages or the citation
+block. Use `--live --judge` when the answers come from `gemma3:12b`. The
+report adds a `jdg` column and a `judge=` total. The offline CI command does
+not pass `--judge`.
 
 The eval set (`tests/eval_set.py`) covers the original handbook, the new
 documents, named-version lookups, compares between any two versions, restricted

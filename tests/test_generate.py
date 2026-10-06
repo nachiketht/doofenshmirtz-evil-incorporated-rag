@@ -47,6 +47,24 @@ def test_generation_adapter_forwards_the_system_prompt():
     assert client.calls[0]["system"] == "rules"
 
 
+def test_generation_adapter_forwards_options_and_format():
+    client = FakeClient({"response": "{}"})
+
+    def generate(model, prompt, stream, **kwargs):
+        client.calls.append({"model": model, "prompt": prompt, "stream": stream, **kwargs})
+        return client.response
+
+    client.generate = generate
+    GenerationAdapter(client=client, model="gemma3:27b").generate(
+        "grade this",
+        system="json only",
+        options={"temperature": 0},
+        response_format="json",
+    )
+    assert client.calls[0]["options"] == {"temperature": 0}
+    assert client.calls[0]["format"] == "json"
+
+
 class RecordingModel:
     def __init__(self):
         self.calls = []

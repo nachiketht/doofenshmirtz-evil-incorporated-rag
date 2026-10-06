@@ -3,6 +3,7 @@
     python scripts/run_eval.py                 # offline: hashing embedder, heuristic
                                                # router/answerer, temp Chroma store
     python scripts/run_eval.py --live          # Ollama + Cohere + the configured store
+    python scripts/run_eval.py --judge         # also score each answer with local gemma3:27b
     python scripts/run_eval.py --min-recall 0.8 --max-leaks 0   # CI gates
 
 Restricted cases run only when RAG_ACCESS_PHRASE is set (offline mode uses a
@@ -39,8 +40,18 @@ def main(argv=None) -> int:
     parser.add_argument("--min-recall", type=float, default=None)
     parser.add_argument("--min-accuracy", type=float, default=None)
     parser.add_argument("--max-leaks", type=int, default=None)
+    parser.add_argument(
+        "--judge",
+        action="store_true",
+        help="score each generated answer with local Ollama gemma3:27b",
+    )
     args = parser.parse_args(argv)
     silence_console()
+    judge = None
+    if args.judge:
+        from rag.judge import judge_answer
+
+        judge = judge_answer
     with tempfile.TemporaryDirectory() as tmp:
         if args.live:
             from rag.pipeline import build_components
@@ -48,14 +59,18 @@ def main(argv=None) -> int:
             components = build_components(args.db)
             components.cache = None
             phrase = access_phrase()
-            report = evaluate(CASES, components, RetrievalOptions.from_env(), phrase)
+            report = evaluate(
+                CASES, components, RetrievalOptions.from_env(), phrase, judge=judge
+            )
             default_out = ROOT / "results" / "result.json"
         else:
             from adapter.database_adapter import DatabaseAdapter
 
             database = DatabaseAdapter(Path(tmp) / "chroma")
             components = offline_components(ROOT / "docs", database)
-            report = evaluate(CASES, components, offline_options(), OFFLINE_PHRASE)
+            report = evaluate(
+                CASES, components, offline_options(), OFFLINE_PHRASE, judge=judge
+            )
             default_out = ROOT / "results" / "offline_eval.json"
     out = Path(args.out) if args.out else default_out
     out.parent.mkdir(parents=True, exist_ok=True)

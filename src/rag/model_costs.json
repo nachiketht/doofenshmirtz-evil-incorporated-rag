@@ -4,6 +4,7 @@
     "embeddinggemma:latest": {"provider": "ollama", "input_per_1k_tokens": 0.0, "output_per_1k_tokens": 0.0},
     "gemma3:4b": {"provider": "ollama", "input_per_1k_tokens": 0.0, "output_per_1k_tokens": 0.0},
     "gemma3:12b": {"provider": "ollama", "input_per_1k_tokens": 0.0, "output_per_1k_tokens": 0.0},
+    "gemma3:27b": {"provider": "ollama", "input_per_1k_tokens": 0.0, "output_per_1k_tokens": 0.0},
     "rerank-v3.5": {"provider": "cohere", "per_search": 0.002},
     "chroma": {"provider": "local", "per_query": 0.0, "per_write": 0.0},
     "pinecone": {"provider": "pinecone", "per_query": 0.00008, "per_write": 0.000004, "_note": "serverless read/write unit estimate; adjust to your plan"}
