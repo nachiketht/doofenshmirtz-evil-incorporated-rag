@@ -69,7 +69,8 @@ def passages(kind: str, hits: list) -> list[str]:
 
 
 def verify(answer: str, kind: str, hits: list, min_overlap: float = 0.5) -> dict:
-    body = answer.split("\n\n")[0]
+    # ``generate`` appends the citation block after the last blank line.
+    body = answer.rsplit("\n\n", 1)[0]
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", body) if s.strip()]
     sources = [content_words(text) for text in passages(kind, hits)]
     unsupported = []

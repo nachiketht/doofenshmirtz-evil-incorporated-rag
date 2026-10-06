@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 
 from rag import lifecycle
-from rag.access import access_filter, parse_access, visible
+from rag.access import TOP_SECRET, access_filter, parse_access, visible
 from rag.algorithms import (
     CORRECTIVE_PROMPT,
     REWRITE_PROMPT,
@@ -119,11 +119,21 @@ def catalog(rows: list[dict]) -> dict:
 
 
 def fold(rows: list[dict]) -> list[dict]:
+    """Collapse alias duplicates (same section under two policy names).
+
+    ``chunk_index`` is part of the key so chunkers that emit several chunks per
+    heading (recursive pieces, table/list segments, size-cap splits) keep them.
+    """
     seen = set()
     folded = []
     for row in rows:
         row = {**row, "policy": canonicalize(row["policy"])}
-        key = (row["policy"], row["version"], row["heading_path"])
+        key = (
+            row["policy"],
+            row["version"],
+            row["heading_path"],
+            row.get("chunk_index", 0),
+        )
         if key in seen:
             continue
         seen.add(key)
@@ -233,15 +243,21 @@ def side(row: dict) -> dict:
         "section": row["section"],
         "parent_id": row["parent_id"],
         "source": row["source"],
+        "classification": row.get("classification", TOP_SECRET),
     }
 
 
-def pair_hits(latest_hits, previous_hits):
-    previous_by_path = {hit["heading_path"]: hit for hit in previous_hits}
+def pair_hits(latest_hits, previous_hits, limit=FUSE_N):
+    """One pair per section; hits are best-first, so each side keeps its best chunk."""
+    previous_by_path = {}
+    for hit in previous_hits:
+        previous_by_path.setdefault(hit["heading_path"], hit)
     pairs = []
     seen = set()
     for hit in latest_hits:
         path = hit["heading_path"]
+        if path in seen:
+            continue
         seen.add(path)
         previous = previous_by_path.get(path)
         pairs.append(
@@ -256,6 +272,7 @@ def pair_hits(latest_hits, previous_hits):
     for hit in previous_hits:
         if hit["heading_path"] in seen:
             continue
+        seen.add(hit["heading_path"])
         pairs.append(
             {
                 "policy": hit["policy"],
@@ -266,7 +283,7 @@ def pair_hits(latest_hits, previous_hits):
             }
         )
     pairs.sort(key=lambda pair: (-pair["score"], pair["heading_path"]))
-    return pairs[:FUSE_N]
+    return pairs[:limit]
 
 
 def side_text(label: str, item) -> str:
@@ -616,13 +633,14 @@ def lookup(
     where["$or"] = pair_filter(pairs, names)
     queries = expand_queries(question, model, options)
     vectors = embed_queries(embedder, queries, vector)
-    hits = finish(
-        question,
-        vector,
-        search(queries, vectors, database, where, level, options),
-        reranker,
-        options,
-    )
+
+    def run(pairs_, queries_, vectors_, ask):
+        scoped = dict(where)
+        scoped["$or"] = pair_filter(pairs_, names)
+        fused = search(queries_, vectors_, database, scoped, level, options)
+        return finish(ask, vectors_[0], fused, reranker, options)
+
+    hits = run(pairs, queries, vectors, question)
     meta = {"queries": queries}
     if not options.self_correct or not hits:
         if options.self_correct and not hits:
@@ -630,6 +648,25 @@ def lookup(
         return hits, meta
     signal = relevance(hits, vector)
     meta["relevance"] = signal
+    # A named-policy guess that doesn't actually answer the question (e.g.
+    # "Agent P" -> Sighting Reports, while colour lives in another document)
+    # is widened to every latest document before we rewrite the query.
+    if (
+        is_low(signal, options)
+        and decision.get("policy")
+        and not decision.get("version")
+    ):
+        all_pairs = lookup_pairs(active, "", "")
+        if len(all_pairs) > len(pairs):
+            with stage("self_correct"):
+                log(
+                    "self_correct",
+                    f"broaden=all from={decision['policy']} cosine={signal['cosine']}",
+                )
+                hits = run(all_pairs, queries, vectors, question)
+                pairs = all_pairs
+                signal = relevance(hits, vector)
+                meta.update(relevance=signal, broadened=True)
     retries = 0
     while is_low(signal, options) and retries < options.max_retries:
         retries += 1
@@ -642,8 +679,7 @@ def lookup(
             )
             log("self_correct", f"retry={retries} cosine={signal['cosine']}")
             retry_vector = embedder.embed([rewritten], task="query")[0]
-        fused = search([rewritten], [retry_vector], database, where, level, options)
-        hits = finish(rewritten, retry_vector, fused, reranker, options)
+        hits = run(pairs, [rewritten], [retry_vector], rewritten)
         signal = relevance(hits, retry_vector)
         meta.update(corrected_query=rewritten, relevance=signal)
     if not hits or is_low(signal, options):
@@ -666,7 +702,7 @@ def compare(
         where = {**base, "$or": pair_filter([(policy, version)], names)}
         return search([question], [vector], database, where, level, options)
 
-    pairs = pair_hits(side_hits(newer), side_hits(older))
+    pairs = pair_hits(side_hits(newer), side_hits(older), options.fuse_n)
     with stage("rerank"):
         ordered = rerank_items(
             question, pairs, [pair_text(pair) for pair in pairs], reranker

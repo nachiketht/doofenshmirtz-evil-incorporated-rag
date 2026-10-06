@@ -160,6 +160,25 @@ def test_empty_store(database):
     database.upsert([], [])
 
 
+def test_update_on_missing_pinecone_registry_is_a_noop():
+    class NotFoundError(Exception):
+        pass
+
+    class EmptyRegistry(FakePineconeIndex):
+        def update(self, id, set_metadata, namespace=""):
+            if namespace.endswith("__documents"):
+                raise NotFoundError("Namespace not found")
+            return super().update(id, set_metadata, namespace)
+
+    index = EmptyRegistry()
+    database = PineconeDatabaseAdapter(index=index, namespace="dev", dimension=2)
+    seed(database)
+    assert database.update_document("HR Policy", "1.0", {"status": "retired"}) == 1
+    assert {
+        row["status"] for row in database.get({"policy": "HR Policy", "version": "1.0"})
+    } == {"retired"}
+
+
 def test_pinecone_ids_are_ascii_and_scoped_by_document():
     first = vector_id("HR Policy|2.0|4. Dress — Code", "HR Policy", "2.0")
     assert first.isascii()
@@ -176,6 +195,21 @@ def test_pinecone_uses_namespaces_and_a_document_registry():
     assert len(index.namespaces["staging__documents"]) == 3
     database.delete_document("HR Policy", "1.0")
     assert len(index.namespaces["staging__documents"]) == 2
+
+
+def test_delete_on_empty_pinecone_index_is_a_noop():
+    class NotFoundError(Exception):
+        pass
+
+    class EmptyIndex(FakePineconeIndex):
+        def list(self, prefix=None, namespace=""):
+            raise NotFoundError("Namespace not found")
+
+        def delete(self, ids, namespace=""):
+            raise NotFoundError("Namespace not found")
+
+    database = PineconeDatabaseAdapter(index=EmptyIndex(), namespace="dev")
+    assert database.delete_document("HR Policy", "1.0") == 0
 
 
 def test_pinecone_get_follows_pagination():

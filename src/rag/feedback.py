@@ -21,7 +21,7 @@ import sys
 import time
 from pathlib import Path
 
-from rag.access import TOP_SECRET, access_phrase
+from rag.access import INTERNAL, TOP_SECRET, access_phrase
 from rag.config import STATE_DIR, env_value
 
 LAST_FILE = "last_answer.json"
@@ -49,11 +49,16 @@ def scrub(value, phrase: str):
 
 def chunk_summary(hit: dict) -> dict:
     if "current" in hit:  # compare pair
-        sides = [hit.get("current"), hit.get("previous")]
+        sides = [side for side in (hit.get("current"), hit.get("previous")) if side]
+        # A side without a classification is treated as top-secret (fail closed).
+        secret = any(
+            side.get("classification", TOP_SECRET) == TOP_SECRET for side in sides
+        )
         return {
             "policy": hit.get("policy"),
             "heading_path": hit.get("heading_path"),
-            "ids": [side["id"] for side in sides if side],
+            "classification": TOP_SECRET if secret else INTERNAL,
+            "ids": [side["id"] for side in sides],
         }
     secret = hit.get("classification") == TOP_SECRET
     return {

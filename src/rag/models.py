@@ -38,6 +38,7 @@ class Chunk(BaseModel):
     doc_title: str | None = None
     classification: str = "internal"
     status: str = "active"
+    admin_status: str | None = None
     is_latest: bool = True
     effective_from: str | None = None
     effective_to: str | None = None

@@ -173,6 +173,22 @@ def test_aliases_collapse_to_one_heading(tmp_path):
     assert found["hits"][0]["policy"] == "Time & Usage Policy"
 
 
+def test_sibling_chunks_under_one_heading_all_reach_the_reranker(tmp_path):
+    text = record("HR Policy", "2.0", "3. Dress Code", "no capes")
+    table = {
+        **record("HR Policy", "2.0", "3. Dress Code", "| Item | Allowed |"),
+        "id": "HR Policy|2.0|3. Dress Code #2",
+        "chunk_index": 1,
+    }
+    _found, _prompts, documents = ask(
+        tmp_path,
+        [text, table],
+        [[1.0, 0.0], [0.9, 0.1]],
+        ['{"kind":"lookup","policy":"","version":""}'],
+    )
+    assert sorted(documents[0]) == ["no capes", "| Item | Allowed |"]
+
+
 def test_compare_pairs_current_and_previous(tmp_path):
     rows = [
         record("HR Policy", "2.0", "3. Leave", "no dessert"),
@@ -190,6 +206,7 @@ def test_compare_pairs_current_and_previous(tmp_path):
     leave = by_heading["3. Leave"]
     assert leave["current"]["text"] == "no dessert"
     assert leave["previous"]["text"] == "cake on friday"
+    assert leave["current"]["classification"] == "internal"
     assert by_heading["8. Added"]["current"]["text"] == "new clause"
     assert by_heading["8. Added"]["previous"] is None
     assert by_heading["9. Only Old"]["previous"]["text"] == "removed clause"

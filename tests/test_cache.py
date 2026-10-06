@@ -52,6 +52,22 @@ def test_ttl_expires_entries():
     assert SemanticCache(ttl_seconds=0).ttl is None
 
 
+def test_memory_only_levels_are_never_written_to_disk(tmp_path):
+    path = tmp_path / "cache.json"
+    cache = SemanticCache(path=path, memory_only_levels=("restricted",))
+    cache.store([1.0, 0.0], "restricted", "c", {"answer": "Operation Bubblegum"})
+    cache.store([0.0, 1.0], "default", "c", {"answer": "cake"})
+    assert (
+        cache.lookup([1.0, 0.0], "restricted", "c")["answer"] == "Operation Bubblegum"
+    )
+    assert "Bubblegum" not in path.read_text()
+    legacy = SemanticCache(path=path)  # an old file may still hold one
+    legacy.store([1.0, 0.0], "restricted", "c", {"answer": "Operation Bubblegum"})
+    reloaded = SemanticCache(path=path, memory_only_levels=("restricted",))
+    assert reloaded.lookup([1.0, 0.0], "restricted", "c") is None
+    assert reloaded.lookup([0.0, 1.0], "default", "c")["answer"] == "cake"
+
+
 def test_persistence_round_trip_and_bad_files(tmp_path):
     path = tmp_path / "state" / "cache.json"
     cache = SemanticCache(path=path)

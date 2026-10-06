@@ -20,6 +20,16 @@ def test_unsupported_sentence_is_reported():
     assert result["unsupported"] == ["Platypus rides cost extra money."]
 
 
+def test_every_paragraph_before_the_citations_is_checked():
+    result = verify(
+        "Expense reports are due within 14 days.\n\n"
+        "Platypus rides cost extra money.\n\nFinance 2.0",
+        "lookup",
+        HITS,
+    )
+    assert result["unsupported"] == ["Platypus rides cost extra money."]
+
+
 def test_compare_uses_both_sides_and_empty_answers():
     pair = [
         {"current": {"text": "button six inches"}, "previous": {"text": "three inches"}}

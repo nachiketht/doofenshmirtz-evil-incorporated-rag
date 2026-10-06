@@ -50,6 +50,23 @@ USD, models) and a total row. `--json` prints the same data as JSON, and
 `--no-cache` bypasses the semantic cache. Prices come from
 `src/rag/model_costs.json` (local Ollama models cost $0).
 
+## Policy desk
+
+```bash
+python -m rag.server                       # http://127.0.0.1:8000
+python -m rag.server --host 127.0.0.1 --port 8080
+```
+
+Open that URL and ask a question. The page shows the answer, the cited
+sections (policy, version, heading, passage), whether each sentence is
+grounded, and a per-step latency / token / cost trace. Useful / Off saves the
+same feedback as `python -m rag.feedback`.
+
+`POST /ask` with `{"question": "...", "no_cache": false}` returns the same
+JSON as `python -m rag.trace --json`. `GET /health` reports that the process
+is up. The first question loads the models and the vector store; later
+questions reuse them.
+
 ## Restricted documents
 
 Top-secret documents (Perry the Platypus countermeasures, Agent P sightings,
@@ -69,7 +86,8 @@ The phrase must be the first word and match exactly; it may be followed by a
 space, `:` or `,`. It is stripped before the question reaches the router, the
 models, the cache, the logs or the feedback file. Access is enforced with a
 metadata filter in the vector store and re-checked on every hit, never by
-prompting. Cached answers are partitioned by access level.
+prompting. Cached answers are partitioned by access level, and restricted
+answers are kept in memory only (never written to `.rag/`).
 
 ## Ingest and document lifecycle
 
@@ -82,11 +100,14 @@ python -m rag.chunking stats --strategy table_aware
 * Files must be named `Doofenshmirtz Evil Inc - <Title> v<N.N>.<pdf|docx|md>`.
   `docs/manifest.json` adds department, document type, classification and
   effective dates; a `TOP SECRET` banner always forces top-secret.
-* Ingest is incremental: unchanged files (same bytes, chunker and extractor)
-  are skipped, changed ones replace only their own chunks. Newer versions
-  automatically supersede older ones (`is_latest`, effective-to dates).
+* Ingest is incremental: unchanged files (same bytes, chunker, extractor and
+  Matryoshka setting) are skipped, changed ones replace only their own chunks.
+  Everything is embedded before the first write, so a failed run (e.g. Ollama
+  down) leaves the store untouched. Newer versions automatically supersede
+  older ones (`is_latest`, effective-to dates).
 * Retired versions drop out of normal lookups but stay available for compares;
-  `purge` deletes them.
+  `purge` deletes them. A status set with `rag.admin retire|restore` overrides
+  the manifest's `status` and survives re-ingest.
 * Backends: `RAG_DB_BACKEND=chroma` (default, local) or `pinecone`
   (`PINECONE_API_KEY`, `PINECONE_INDEX`, `PINECONE_NAMESPACE`).
 

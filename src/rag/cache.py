@@ -4,7 +4,8 @@ A new question reuses a cached answer when its embedding is at least
 ``threshold`` cosine-similar to a cached question **and** it was asked at the
 same access level **and** against the same corpus fingerprint (any ingest that
 changes a document invalidates old answers). Restricted answers are therefore
-never served to a default-access question.
+never served to a default-access question. Entries at ``memory_only_levels``
+(the pipeline passes the restricted level) are never written to disk.
 
 Bounded by ``max_entries`` (least-recently-used entry evicted first); entries
 older than ``ttl_seconds`` are ignored and purged. Optional JSON persistence.
@@ -29,6 +30,7 @@ class SemanticCache:
         threshold: float = 0.95,
         path=None,
         clock=time.time,
+        memory_only_levels=(),
     ):
         if max_entries < 1:
             raise ValueError("max_entries must be at least 1")
@@ -36,6 +38,7 @@ class SemanticCache:
         self.ttl = ttl_seconds if ttl_seconds and ttl_seconds > 0 else None
         self.threshold = threshold
         self.path = Path(path) if path else None
+        self.memory_only_levels = frozenset(memory_only_levels)
         self.clock = clock
         self.entries: OrderedDict[str, dict] = OrderedDict()
         self.hits = self.misses = self.evictions = 0
@@ -116,6 +119,8 @@ class SemanticCache:
         except json.JSONDecodeError:
             return
         for key, entry in data.get("entries", []):
+            if entry.get("access_level") in self.memory_only_levels:
+                continue
             self.entries[key] = entry
         while len(self.entries) > self.max_entries:
             self.entries.popitem(last=False)
@@ -123,5 +128,10 @@ class SemanticCache:
     def _save(self) -> None:
         if not self.path:
             return
+        saved = [
+            (key, entry)
+            for key, entry in self.entries.items()
+            if entry["access_level"] not in self.memory_only_levels
+        ]
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({"entries": list(self.entries.items())}))
+        self.path.write_text(json.dumps({"entries": saved}))

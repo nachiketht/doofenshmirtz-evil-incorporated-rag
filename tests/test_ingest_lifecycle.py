@@ -245,6 +245,78 @@ def test_admin_retire_restore_purge_and_list(docs, database, capsys):
     assert "Inator Safety Policy" in out and "purged chunks=" in out
 
 
+class FailingEmbedder:
+    def embed(self, texts, task):
+        raise RuntimeError("ollama down")
+
+
+class ShortEmbedder:
+    def embed(self, texts, task):
+        return [[1.0, 0.5]]
+
+
+def test_embedder_returning_too_few_vectors_is_an_error(docs, database):
+    write(docs, "1.0", V1)
+    with pytest.raises(ValueError, match="vectors"):
+        ingest(docs, ShortEmbedder(), database)
+    assert database.count() == 0
+
+
+def test_embedder_failure_leaves_the_store_untouched(docs, database):
+    write(docs, "1.0", V1)
+    write(docs, "2.0", V2)
+    ingest(docs, CountingEmbedder(), database)
+    before = {v: headings(database, v) for v in ("1.0", "2.0")}
+    with pytest.raises(RuntimeError):
+        ingest(docs, FailingEmbedder(), database, force=True)
+    assert {v: headings(database, v) for v in ("1.0", "2.0")} == before
+    assert set(catalog(database)) == {
+        ("Inator Safety Policy", "1.0"),
+        ("Inator Safety Policy", "2.0"),
+    }
+
+
+def test_admin_status_survives_reingest_over_the_manifest(docs, database):
+    v2 = write(docs, "2.0", V2)
+    write(docs, "1.0", V1)
+    write_manifest(
+        docs,
+        {
+            NAME.format(version="1.0"): {"status": "active"},
+            NAME.format(version="2.0"): {"status": "active"},
+        },
+    )
+    ingest(docs, CountingEmbedder(), database)
+    assert admin.main(["retire", "Inator Safety Policy", "2.0"], database) == 0
+    ingest(docs, CountingEmbedder(), database)  # unchanged file: metadata sync
+    assert catalog(database)[("Inator Safety Policy", "2.0")]["status"] == "retired"
+    v2.write_text(V2 + "\n## 9. Extra\nNew rule.\n", encoding="utf-8")
+    ingest(docs, CountingEmbedder(), database)  # changed file: re-embedded
+    entry = catalog(database)[("Inator Safety Policy", "2.0")]
+    assert entry["status"] == "retired" and entry["is_latest"] is False
+    assert {r["status"] for r in database.get({"version": "2.0"})} == {"retired"}
+    assert admin.main(["restore", "Inator Safety Policy", "2.0"], database) == 0
+    ingest(docs, CountingEmbedder(), database)
+    assert catalog(database)[("Inator Safety Policy", "2.0")]["status"] == "active"
+
+
+def test_enabling_matryoshka_reembeds_unchanged_files(docs, tmp_path):
+    from rag.matryoshka import MatryoshkaDatabase
+
+    write(docs, "1.0", V1)
+    primary = DatabaseAdapter(tmp_path / "mrl")
+    ingest(docs, CountingEmbedder(), primary)
+    secondary = DatabaseAdapter(tmp_path / "mrl", name="policies_mrl1")
+    wrapped = MatryoshkaDatabase(primary, secondary, dims=1)
+    embedder = CountingEmbedder()
+    ingest(docs, embedder, wrapped)
+    assert embedder.texts
+    assert secondary.count() == primary.count() > 0
+    again = CountingEmbedder()
+    ingest(docs, again, wrapped)
+    assert again.texts == []
+
+
 def test_missing_files_are_kept_not_deleted(docs, database, caplog):
     import logging
 

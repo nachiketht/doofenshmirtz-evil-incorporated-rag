@@ -64,6 +64,10 @@ def _get(obj, name, default=None):
     return getattr(obj, name, default)
 
 
+def _is_missing(exc: BaseException) -> bool:
+    return type(exc).__name__ == "NotFoundError" or "Namespace not found" in str(exc)
+
+
 def connect_index(api_key: str, name: str, dimension: int | None, cloud, region):
     from pinecone import Pinecone, ServerlessSpec  # optional dependency
 
@@ -141,19 +145,35 @@ class PineconeDatabaseAdapter:
         log("database", f"pinecone ns={self.namespace} upserts={len(payload)}")
 
     def _ids_with_prefix(self, prefix: str, namespace: str) -> list[str]:
+        try:
+            pages = self.index.list(prefix=prefix, namespace=namespace)
+        except Exception as exc:
+            if _is_missing(exc):
+                return []
+            raise
         ids = []
-        for page in self.index.list(prefix=prefix, namespace=namespace):
+        for page in pages:
             if isinstance(page, (list, tuple)):
                 ids.extend(_get(item, "id", item) for item in page)
             else:
                 ids.extend(_get(item, "id", item) for item in _get(page, "vectors", []))
         return [str(item) for item in ids]
 
+    def _delete_ids(self, ids: list[str], namespace: str) -> None:
+        if not ids:
+            return
+        try:
+            for start in range(0, len(ids), 1000):
+                self.index.delete(ids=ids[start : start + 1000], namespace=namespace)
+        except Exception as exc:
+            if _is_missing(exc):
+                return
+            raise
+
     def delete_document(self, policy: str, version: str) -> int:
         ids = self._ids_with_prefix(doc_prefix(policy, version), self.namespace)
-        for start in range(0, len(ids), 1000):
-            self.index.delete(ids=ids[start : start + 1000], namespace=self.namespace)
-        self.index.delete(ids=[registry_id(policy, version)], namespace=self.registry)
+        self._delete_ids(ids, self.namespace)
+        self._delete_ids([registry_id(policy, version)], self.registry)
         record_usage(BACKEND, writes=len(ids) + 1)
         log(
             "database",
@@ -161,15 +181,22 @@ class PineconeDatabaseAdapter:
         )
         return len(ids)
 
+    def _update(self, record_id: str, values: dict, namespace: str) -> None:
+        try:
+            self.index.update(id=record_id, set_metadata=values, namespace=namespace)
+        except Exception as exc:
+            if not _is_missing(exc):
+                raise
+
     def update_document(self, policy: str, version: str, values: dict) -> int:
         values = {key: value for key, value in values.items() if value is not None}
         ids = self._ids_with_prefix(doc_prefix(policy, version), self.namespace)
         for item in ids:
-            self.index.update(id=item, set_metadata=values, namespace=self.namespace)
+            self._update(item, values, self.namespace)
         rid = registry_id(policy, version)
         doc_values = {k: v for k, v in values.items() if k in DOCUMENT_FIELDS}
         if doc_values:
-            self.index.update(id=rid, set_metadata=doc_values, namespace=self.registry)
+            self._update(rid, doc_values, self.registry)
         record_usage(BACKEND, writes=len(ids) + 1)
         log(
             "database",
@@ -237,26 +264,31 @@ class PineconeDatabaseAdapter:
         log("database", f"pinecone query n={n} where={bool(mongo)} hits={len(hits)}")
         return hits
 
-    def get(self, where: dict | None = None, include_vectors: bool = False):
-        rows = []
+    def _fetch_all(self, where: dict | None, namespace: str) -> list:
+        """Every record in ``namespace`` matching ``where`` (paginated, no top_k cap)."""
+        items = []
         token = None
         mongo = to_mongo(where) or {"policy": {"$ne": ""}}
         while True:
-            kwargs = {"filter": mongo, "namespace": self.namespace, "limit": 1000}
+            kwargs = {"filter": mongo, "namespace": namespace, "limit": 1000}
             if token:
                 kwargs["pagination_token"] = token
             page = self.index.fetch_by_metadata(**kwargs)
-            vectors = _get(page, "vectors", {}) or {}
-            for item in vectors.values():
-                row = self._row(item)
-                if not include_vectors:
-                    row["vector"] = []
-                rows.append(row)
+            items.extend((_get(page, "vectors", {}) or {}).values())
             pagination = _get(page, "pagination")
             token = _get(pagination, "next") if pagination else None
             if not token:
                 break
         record_usage(BACKEND, queries=1)
+        return items
+
+    def get(self, where: dict | None = None, include_vectors: bool = False):
+        rows = []
+        for item in self._fetch_all(where, self.namespace):
+            row = self._row(item)
+            if not include_vectors:
+                row["vector"] = []
+            rows.append(row)
         return [row for row in rows if matches(row, where)]
 
     def fetch_vectors(self, rows: list[dict]) -> dict[str, list[float]]:
@@ -279,26 +311,11 @@ class PineconeDatabaseAdapter:
         return self.get(include_vectors=True)
 
     def documents(self, where: dict | None = None) -> list[dict]:
-        try:
-            dimension = self.dimension or self._stats_dimension()
-        except ValueError:
-            return []  # empty index: nothing registered yet
-        probe = [0.0] * dimension
-        probe[0] = 1.0
-        kwargs = {
-            "vector": probe,
-            "top_k": 10000,
-            "namespace": self.registry,
-            "include_metadata": True,
-        }
-        mongo = to_mongo(where)
-        if mongo:
-            kwargs["filter"] = mongo
-        result = self.index.query(**kwargs)
-        record_usage(BACKEND, queries=1)
         entries = []
-        for match in _get(result, "matches", []) or []:
-            meta = dict(_get(match, "metadata", {}) or {})
+        for item in self._fetch_all(where, self.registry):
+            meta = dict(_get(item, "metadata", {}) or {})
+            if not matches(meta, where):
+                continue
             entry = {key: meta.get(key, "") for key in DOCUMENT_FIELDS}
             entry["chunks"] = int(meta.get("chunks", 0))
             entries.append(entry)

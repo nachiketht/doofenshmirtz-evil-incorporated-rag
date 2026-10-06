@@ -62,11 +62,17 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import sys
           from pathlib import Path
+          sys.path.insert(0, "tests")
+          from eval_set import CASES
           data = json.loads(Path("results/result.json").read_text())
           totals = data["totals"]
-          assert totals.get("leaks", 0) == 0, totals
+          asked = {row["question"] for row in data["rows"]}
+          missing = [c["question"] for c in CASES if c.get("access") != "restricted" and c["question"] not in asked]
+          assert not missing, f"results/result.json is stale; rerun scripts/run_eval.py --live. missing={missing}"
+          assert "leaks" in totals and totals["leaks"] == 0, totals
           assert totals["recall"] >= 0.9, totals
-          assert len(data["rows"]) >= 8
+          assert totals["accuracy"] >= 0.8, totals
           print(f"live recall={totals['recall']:.3f} accuracy={totals['accuracy']:.3f} questions={len(data['rows'])}")
           PY

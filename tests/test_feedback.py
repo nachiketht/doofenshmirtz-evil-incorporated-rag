@@ -82,6 +82,26 @@ def test_compare_pairs_keep_ids(tmp_path):
     assert feedback.load_last(tmp_path)["chunks"][0]["ids"] == ["a"]
 
 
+def test_top_secret_compare_answer_is_redacted(tmp_path):
+    pair = {
+        "policy": "Perry the Platypus Countermeasures Protocol",
+        "heading_path": "3. Traps",
+        "current": {"id": "a", "classification": "top-secret"},
+        "previous": {"id": "b", "classification": "top-secret"},
+    }
+    secret = result(
+        kind="compare", access="restricted", answer="Bubblegum Bowler.", hits=[pair]
+    )
+    feedback.save_last(secret, tmp_path, phrase=PHRASE)
+    stored = feedback.load_last(tmp_path)
+    assert stored["answer"] == feedback.REDACTED
+    assert stored["chunks"][0]["ids"] == ["a", "b"]
+    open_pair = {**pair, "current": {"id": "a", "classification": "internal"}}
+    open_pair["previous"] = None
+    feedback.save_last(result(kind="compare", hits=[open_pair]), tmp_path, phrase="")
+    assert feedback.load_last(tmp_path)["answer"] == "Within 14 days."
+
+
 def test_candidates_are_unique_thumbs_down(tmp_path):
     feedback.save_last(result(), tmp_path, phrase=PHRASE)
     feedback.record_vote("down", "wrong version", tmp_path, phrase=PHRASE)

@@ -82,12 +82,23 @@ def test_wrapper_delegates_writes_and_reads():
     assert {row["status"] for row in secondary.rows()} == {"retired"}
     database.put_document({"policy": "Doc", "version": "1.0", "status": "retired"})
     assert [d["policy"] for d in database.documents()] == ["Doc"]
+    assert [d["policy"] for d in secondary.documents()] == ["Doc"]
     assert database.fetch_vectors(database.rows()[:1])
     assert database.delete_document("Doc", "1.0") == 3
     assert secondary.count() == 0
     assert database.query(QUERY, 2) == []
     with pytest.raises(ValueError):
         MatryoshkaDatabase(primary, secondary, dims=0)
+
+
+def test_empty_secondary_falls_back_to_the_full_index():
+    primary, secondary = pinecone("full"), pinecone("mrl")
+    records = [record(name, f"{i}. {name}") for i, name in enumerate(VECTORS)]
+    primary.upsert(records, list(VECTORS.values()))
+    database = MatryoshkaDatabase(primary, secondary, dims=2)
+    hits = database.query(QUERY, 1)
+    assert [hit["text"] for hit in hits] == ["target"]
+    assert database.ingest_tag == "mrl2"
 
 
 def test_factory_wraps_when_mrl_is_configured(tmp_path):

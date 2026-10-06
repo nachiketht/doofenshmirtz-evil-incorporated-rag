@@ -80,6 +80,9 @@ def document_fields(manifest_entry: dict, stored: dict | None, title: list[str])
     }
     if stored and not manifest_entry.get("_explicit_status"):
         fields["status"] = stored.get("status") or fields["status"]
+    override = (stored or {}).get("admin_status")
+    if override:
+        fields["status"] = fields["admin_status"] = override
     if not fields["doc_title"] and stored:
         fields["doc_title"] = stored.get("doc_title") or None
     return fields
@@ -89,10 +92,13 @@ def manifest_changes(entry: dict, raw_entry: dict, previous: dict) -> dict:
     """Metadata to update for an unchanged file: only keys the manifest sets.
 
     Keys the manifest does not mention keep their stored value, so a banner-
-    derived top-secret classification can never be silently downgraded.
+    derived top-secret classification can never be silently downgraded, and a
+    status set with ``rag.admin`` wins over the manifest's.
     """
     if previous.get("classification") == TOP_SECRET:
         entry["classification"] = TOP_SECRET
+    if previous.get("admin_status"):
+        entry["status"] = previous["admin_status"]
     wanted = {key: entry[key] for key in raw_entry if key in SYNCED_FIELDS}
     if "effective_from" in wanted:
         wanted["effective_from_num"] = date_number(wanted["effective_from"], 0)
@@ -110,6 +116,19 @@ def enrich(records: list[dict], fields: dict, digest: str, strategy: str) -> Non
         for key, value in fields.items():
             if value is not None:
                 record[key] = value
+
+
+def embed_records(embedder, records: list[dict]) -> list[list[float]]:
+    vectors = []
+    for start in range(0, len(records), EMBED_BATCH):
+        batch = records[start : start + EMBED_BATCH]
+        found = embedder.embed(
+            [record["embed_text"] for record in batch], task="document"
+        )
+        if len(found) != len(batch):
+            raise ValueError(f"embedder returned {len(found)} vectors for {len(batch)}")
+        vectors.extend(found)
+    return vectors
 
 
 def ingest(
@@ -136,6 +155,9 @@ def ingest(
     strategy = getattr(chunk_file, "strategy", strategy)
     extractor = extractor or HeuristicExtractor()
     hash_key = f"{strategy}|{extractor.name}"
+    store_tag = getattr(database, "ingest_tag", "")
+    if store_tag:
+        hash_key = f"{hash_key}|{store_tag}"
     stored = {(d["policy"], d["version"]): d for d in database.documents()}
     log("ingest", f"directory={directory} files={len(files)} known={len(stored)}")
 
@@ -181,6 +203,13 @@ def ingest(
                 return error
         pending.append((policy, version, records, {**fields, "source": path.name}))
 
+    # Embed everything before the first write: an embedder failure must leave
+    # the store exactly as it was, not with a document already deleted.
+    embedded = [
+        (policy, version, records, embed_records(embedder, records), fields)
+        for policy, version, records, fields in pending
+    ]
+
     for policy, version, changes in metadata_only:
         database.update_document(policy, version, changes)
         log(
@@ -188,14 +217,13 @@ def ingest(
             f"metadata policy={policy} version={version} keys={sorted(changes)}",
         )
 
-    for policy, version, records, fields in pending:
+    for policy, version, records, vectors, fields in embedded:
         removed = database.delete_document(policy, version)
         for start in range(0, len(records), EMBED_BATCH):
-            batch = records[start : start + EMBED_BATCH]
-            vectors = embedder.embed(
-                [record["embed_text"] for record in batch], task="document"
+            database.upsert(
+                records[start : start + EMBED_BATCH],
+                vectors[start : start + EMBED_BATCH],
             )
-            database.upsert(batch, vectors)
         database.put_document(
             {
                 "policy": policy,

@@ -38,6 +38,9 @@ class MatryoshkaDatabase:
         self.dims = dims
         self.prefetch = prefetch
         self.backend = f"{primary.backend}+mrl{dims}"
+        # Part of ingest's file hash: switching MRL on (or changing dims)
+        # re-embeds every file so the secondary store is never left empty.
+        self.ingest_tag = f"mrl{dims}"
 
     # writes go to both stores
     def upsert(self, records, vectors):
@@ -53,6 +56,7 @@ class MatryoshkaDatabase:
         return self.primary.update_document(policy, version, values)
 
     def put_document(self, entry):
+        self.secondary.put_document(entry)
         self.primary.put_document(entry)
 
     # reads
@@ -77,6 +81,9 @@ class MatryoshkaDatabase:
                 truncate(vector, self.dims), max(n, self.prefetch), where
             )
         if not shortlist:
+            if self.secondary.count() == 0 and self.primary.count() > 0:
+                log("database", "mrl secondary empty; run ingest --force")
+                return self.primary.query(vector, n, where)
             return []
         with stage("mrl_rescore"):
             full = self.primary.fetch_vectors(shortlist)

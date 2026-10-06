@@ -6,8 +6,8 @@
     python -m rag.admin purge "HR Policy" VERSION --yes   # the only hard delete
 
 Retired documents stay in the store for compares and audits. Without VERSION,
-retire/restore apply to every version of the policy. To make a retirement
-survive re-ingest, also set ``"status": "retired"`` in docs/manifest.json.
+retire/restore apply to every version of the policy. A status set here
+overrides the ``status`` in docs/manifest.json and survives re-ingest.
 """
 
 import argparse
@@ -28,7 +28,11 @@ def _targets(database, policy: str, version: str | None):
 def set_status(database, policy: str, version: str | None, status: str) -> int:
     targets = _targets(database, policy, version)
     for entry in targets:
-        database.update_document(entry["policy"], entry["version"], {"status": status})
+        database.update_document(
+            entry["policy"],
+            entry["version"],
+            {"status": status, "admin_status": status},
+        )
     if targets:
         lifecycle.apply(database)
     return len(targets)

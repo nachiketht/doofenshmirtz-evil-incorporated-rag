@@ -220,6 +220,43 @@ def test_self_correction_rewrites_once_then_gives_up():
     assert lost["hits"] == []
 
 
+def test_wrong_policy_guess_broadens_to_the_rest_of_the_catalog():
+    embedder = HashEmbedder()
+    rows = HR + [
+        record(
+            "Agent P Sighting Reports",
+            "1.0",
+            "3. Entry Points",
+            "Agent P usually arrives between 2:00 and 3:00 p.m.",
+        ),
+        record(
+            "Perry the Platypus Countermeasures Protocol",
+            "2.0",
+            "3. Identification",
+            "Agent P is a teal platypus who wears a brown fedora.",
+        ),
+    ]
+    database = store(rows, embedder)
+    reranker = LocalCrossEncoderReranker(
+        scorer=lambda q, docs: [0.9 if "teal" in d else 0.01 for d in docs]
+    )
+    found = retrieve(
+        "What colour is Agent P?",
+        embedder,
+        ScriptedModel(
+            route='{"kind":"lookup","policy":"Agent P Sighting Reports","version":""}'
+        ),
+        database,
+        reranker,
+        options=RetrievalOptions(
+            self_correct=True, min_cosine=0.0, min_rerank_score=0.5
+        ),
+        access=parse_access("x", ""),
+    )
+    assert found.get("broadened") is True
+    assert any("teal" in hit["text"] for hit in found["hits"])
+
+
 def test_low_calibrated_rerank_score_triggers_not_found():
     embedder = HashEmbedder()
     database = store(HR, embedder)
@@ -297,8 +334,25 @@ def test_build_cache_and_corpus_key(tmp_path):
     assert build_cache(Settings(cache_enabled=False)) is None
     cache = build_cache(Settings(state_dir=str(tmp_path), cache_max=3, cache_ttl=0))
     assert cache.max_entries == 3 and cache.ttl is None
+    assert cache.memory_only_levels == {"restricted"}
     one = [{"policy": "A", "version": "1.0", "file_hash": "x", "status": "active"}]
     assert corpus_key(one) != corpus_key([{**one[0], "status": "retired"}])
+
+
+def test_cached_compare_hits_keep_a_fail_closed_classification():
+    from rag.pipeline import slim
+
+    pair = {
+        "policy": "P",
+        "heading_path": "1. A",
+        "current": {"id": "a", "classification": "internal"},
+        "previous": {"id": "b", "classification": "top-secret"},
+    }
+    assert slim([pair])[0]["classification"] == "top-secret"
+    pair["previous"] = None
+    assert slim([pair])[0]["classification"] == "internal"
+    pair["current"] = {"id": "a"}
+    assert slim([pair])[0]["classification"] == "top-secret"
 
 
 def test_options_from_env_turn_on_enterprise_features(tmp_path):

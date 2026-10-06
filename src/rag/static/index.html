@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Policy desk · Doofenshmirtz Evil Inc</title>
+<style>
+  :root {
+    --bg: #10140f;
+    --ink: #e7f0df;
+    --muted: #93a48b;
+    --line: #2a3828;
+    --acid: #d6f25c;
+    --acid-ink: #162006;
+    --ember: #ff7a45;
+    --paper: #f4f0e4;
+    --paper-ink: #1c1914;
+    --paper-muted: #5e584c;
+    --panel: #171d16;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    color: var(--ink);
+    font-family: var(--sans);
+    background:
+      radial-gradient(900px 420px at 0% -10%, rgba(214, 242, 92, 0.14), transparent 55%),
+      radial-gradient(700px 380px at 100% 0%, rgba(255, 122, 69, 0.1), transparent 50%),
+      var(--bg);
+  }
+  .stripe {
+    height: 10px;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--acid) 0 10px,
+      #10140f 10px 20px
+    );
+  }
+  header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 28px 7vw 8px;
+  }
+  .brand { display: flex; gap: 14px; align-items: center; }
+  .mark {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border: 1.5px solid var(--acid);
+    color: var(--acid);
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    border-radius: 8px;
+  }
+  .eyebrow {
+    margin: 0;
+    color: var(--acid);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 2px 0 0;
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 40px;
+    letter-spacing: -0.03em;
+  }
+  .lede {
+    margin: 0;
+    max-width: 280px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.45;
+    text-align: right;
+  }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr);
+    grid-template-areas:
+      "composer composer"
+      "memo citations"
+      "trace trace";
+    gap: 18px;
+    padding: 18px 7vw 64px;
+  }
+  .composer { grid-area: composer; }
+  .memo { grid-area: memo; }
+  .citations { grid-area: citations; }
+  .trace { grid-area: trace; }
+  label.field {
+    display: block;
+    margin-bottom: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 92px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(8, 12, 8, 0.55);
+    color: var(--ink);
+    font: 18px/1.45 var(--serif);
+  }
+  textarea:focus {
+    outline: 2px solid var(--acid);
+    outline-offset: 2px;
+  }
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 12px;
+  }
+  .check {
+    color: var(--muted);
+    font-size: 14px;
+  }
+  button, .chip {
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  button.ask {
+    border: 0;
+    border-radius: 999px;
+    background: var(--acid);
+    color: var(--acid-ink);
+    font-weight: 700;
+    font-size: 16px;
+    padding: 12px 22px;
+  }
+  button.ask:disabled { opacity: 0.55; cursor: progress; }
+  button.ask:focus-visible, .chip:focus-visible, .vote:focus-visible {
+    outline: 2px solid var(--acid);
+    outline-offset: 2px;
+  }
+  .examples { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip {
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 13px;
+  }
+  .chip:hover { border-color: var(--acid); color: var(--acid); }
+  .chip:disabled { opacity: 0.45; cursor: progress; }
+  .status {
+    min-height: 1.2em;
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .status.error { color: var(--ember); }
+  .memo {
+    background: var(--paper);
+    color: var(--paper-ink);
+    border-radius: 18px;
+    padding: 28px 28px 22px;
+    min-height: 320px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  }
+  .memo.empty {
+    display: grid;
+    align-content: end;
+    background:
+      linear-gradient(180deg, transparent, rgba(28, 25, 20, 0.04)),
+      var(--paper);
+  }
+  .memo h2 {
+    margin: 0 0 12px;
+    font-family: var(--serif);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+  .kicker {
+    margin: 0 0 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--paper-muted);
+  }
+  .prose {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 20px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .pill {
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: rgba(28, 25, 20, 0.06);
+    color: var(--paper-muted);
+  }
+  .pill.warn { background: #ffe1d4; color: #8a3416; }
+  .pill.good { background: #e5f6c4; color: #2d4a09; }
+  .callout {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--ember);
+    background: #fff6f1;
+    color: #6d2c14;
+    font-size: 14px;
+  }
+  .callout p { margin: 0 0 6px; }
+  .votes {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 18px;
+  }
+  .vote, .note {
+    border-radius: 999px;
+    border: 1px solid rgba(28, 25, 20, 0.18);
+    background: transparent;
+    color: var(--paper-ink);
+    padding: 7px 12px;
+    font-size: 14px;
+  }
+  .note { border-radius: 12px; flex: 1; min-width: 0; }
+  .votes .done { color: var(--paper-muted); font-size: 13px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 18px 18px 8px;
+  }
+  .panel h2, .trace h2 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .quiet { color: var(--muted); font-size: 14px; line-height: 1.45; }
+  .card {
+    border-top: 1px solid var(--line);
+    padding: 14px 0 16px;
+  }
+  .card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: baseline;
+  }
+  .index {
+    font-family: var(--mono);
+    color: var(--acid);
+    font-size: 12px;
+    margin-right: 8px;
+  }
+  .policy { font-weight: 600; }
+  .version {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--acid);
+    white-space: nowrap;
+  }
+  .heading {
+    margin: 4px 0 8px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .excerpt {
+    margin: 0;
+    color: #d5e2cc;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .scores {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .secret {
+    display: inline-block;
+    margin-left: 8px;
+    color: var(--ember);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .sides { display: grid; gap: 8px; }
+  .side {
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .side b {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .trace { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0 10px 8px 0;
+  }
+  td {
+    padding: 8px 12px 8px 0;
+    border-top: 1px solid var(--line);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  tr.total td { color: var(--acid); font-weight: 600; }
+  .bar {
+    height: 8px;
+    width: 140px;
+    border-radius: 99px;
+    background: #243024;
+    overflow: hidden;
+  }
+  .bar > span {
+    display: block;
+    height: 100%;
+    background: var(--acid);
+    border-radius: 99px;
+  }
+  tr.total .bar > span { background: var(--ember); }
+  .models { color: var(--muted); white-space: normal; }
+  @media (max-width: 900px) {
+    header { flex-direction: column; align-items: flex-start; padding: 22px 20px 0; }
+    .lede { text-align: left; }
+    h1 { font-size: 32px; }
+    main {
+      grid-template-columns: 1fr;
+      grid-template-areas: "composer" "memo" "citations" "trace";
+      padding: 16px 20px 48px;
+    }
+    .bar { width: 72px; }
+  }
+</style>
+</head>
+<body>
+  <div class="stripe"></div>
+  <header>
+    <div class="brand">
+      <div class="mark">DEI</div>
+      <div>
+        <p class="eyebrow">Doofenshmirtz Evil Incorporated</p>
+        <h1>Policy desk</h1>
+      </div>
+    </div>
+    <p class="lede">Answers come from the handbook, with the section they came from and the time each step took.</p>
+  </header>
+  <main>
+    <section class="composer">
+      <form id="form">
+        <label class="field" for="question">Question</label>
+        <textarea id="question" name="question" required placeholder="How big must a self-destruct button be?"></textarea>
+        <div class="controls">
+          <label class="check"><input id="nocache" type="checkbox"> Skip the cache</label>
+          <button class="ask" id="go" type="submit">Ask the handbook</button>
+        </div>
+      </form>
+      <div class="examples" id="examples"></div>
+      <p class="status" id="status" role="status"></p>
+    </section>
+
+    <article class="memo empty" id="memo">
+      <p class="kicker">Memo</p>
+      <h2>Ask a policy question.</h2>
+      <p class="prose">The answer lands here, with a check that each sentence is grounded in a retrieved passage. Top-secret documents answer only when the question starts with the access phrase.</p>
+    </article>
+
+    <aside class="panel citations" id="citations">
+      <h2>Citations</h2>
+      <p class="quiet">Retrieved sections show up here, in the order they were given to the model.</p>
+    </aside>
+
+    <section class="panel trace" id="trace" hidden>
+      <h2>Latency</h2>
+      <div id="trace-body"></div>
+    </section>
+  </main>
+<script>
+const EXAMPLES = [
+  "How big must a self-destruct button be?",
+  "How many days of pet leave for a platypus?",
+  "What changed about password length between Password and Access Policy v1 and v3?"
+];
+
+const form = document.querySelector("#form");
+const question = document.querySelector("#question");
+const nocache = document.querySelector("#nocache");
+const go = document.querySelector("#go");
+const statusEl = document.querySelector("#status");
+const memo = document.querySelector("#memo");
+const citations = document.querySelector("#citations");
+const trace = document.querySelector("#trace");
+const traceBody = document.querySelector("#trace-body");
+
+function h(tag, attrs, kids) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs || {})) {
+    if (key === "class") node.className = value;
+    else if (value != null && value !== false) node.setAttribute(key, value);
+  }
+  const list = kids == null ? [] : Array.isArray(kids) ? kids : [kids];
+  for (const kid of list) node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  return node;
+}
+
+function seconds(value) {
+  const n = Number(value) || 0;
+  if (n < 1) return Math.round(n * 1000) + " ms";
+  return n.toFixed(n >= 10 ? 1 : 2) + " s";
+}
+
+function money(value) {
+  const n = Number(value) || 0;
+  if (n === 0) return "$0";
+  return "$" + n.toFixed(6);
+}
+
+function label(kind) {
+  return { lookup: "Lookup", compare: "Compare", not_found: "Not found" }[kind] || kind || "Answer";
+}
+
+function setStatus(text, isError) {
+  statusEl.textContent = text || "";
+  statusEl.classList.toggle("error", !!isError);
+}
+
+function proseOf(answer, hits) {
+  if (!hits || !hits.length) return answer || "";
+  const parts = String(answer || "").split("\n\n");
+  if (parts.length < 2) return answer || "";
+  return parts.slice(0, -1).join("\n\n");
+}
+
+function scoreLine(hit) {
+  const bits = [];
+  if (hit.rerank_score != null) bits.push("rerank " + Number(hit.rerank_score).toFixed(3));
+  if (hit.cosine != null) bits.push("cosine " + Number(hit.cosine).toFixed(3));
+  else if (hit.score != null) bits.push("score " + Number(hit.score).toFixed(3));
+  return bits.join(" · ");
+}
+
+function excerpt(text) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (clean.length <= 280) return clean;
+  return clean.slice(0, 277) + "…";
+}
+
+function versionLabel(hit) {
+  if (hit.version) return "v" + hit.version;
+  const from = hit.previous && hit.previous.version;
+  const to = hit.current && hit.current.version;
+  if (from && to) return "v" + from + " → v" + to;
+  return to || from ? "v" + (to || from) : "";
+}
+
+function citationCard(hit, index) {
+  const head = h("div", { class: "card-head" }, [
+    h("div", {}, [
+      h("span", { class: "index" }, String(index).padStart(2, "0")),
+      h("span", { class: "policy" }, hit.policy || "Policy")
+    ]),
+    h("span", { class: "version" }, versionLabel(hit))
+  ]);
+  const card = h("article", { class: "card" });
+  card.append(head);
+  if (hit.classification === "top-secret") card.append(h("span", { class: "secret" }, "TOP SECRET"));
+  card.append(h("p", { class: "heading" }, hit.heading_path || hit.section || ""));
+  if (hit.current || hit.previous) {
+    const sides = h("div", { class: "sides" });
+    for (const key of ["current", "previous"]) {
+      const side = hit[key];
+      if (!side) continue;
+      sides.append(h("div", { class: "side" }, [
+        h("b", {}, key + (side.version ? " v" + side.version : "")),
+        excerpt(side.text)
+      ]));
+    }
+    card.append(sides);
+  } else {
+    card.append(h("p", { class: "excerpt" }, excerpt(hit.text)));
+  }
+  const scores = scoreLine(hit);
+  if (scores) card.append(h("p", { class: "scores" }, scores));
+  return card;
+}
+
+function renderMemo(data) {
+  memo.classList.remove("empty");
+  memo.replaceChildren();
+  memo.append(h("p", { class: "kicker" }, "Memo · " + (data.trace_id || "")));
+  memo.append(h("h2", {}, label(data.kind)));
+  memo.append(h("p", { class: "prose" }, proseOf(data.answer, data.hits)));
+
+  const pills = h("div", { class: "meta" });
+  pills.append(h("span", { class: "pill" }, seconds(data.latency_s)));
+  const total = (data.trace || []).find((row) => row.step === "total") || {};
+  pills.append(h("span", { class: "pill" }, (total.input_tokens || 0) + " in · " + (total.output_tokens || 0) + " out"));
+  pills.append(h("span", { class: "pill" }, money(total.cost_usd)));
+  pills.append(h("span", { class: data.cached ? "pill good" : "pill" }, data.cached ? "Cached" : "Fresh"));
+  if (data.access) {
+    const accessName = { default: "Open", restricted: "Restricted" }[data.access] || data.access;
+    pills.append(h("span", { class: data.access === "restricted" ? "pill warn" : "pill" }, accessName));
+  }
+  const verification = data.verification;
+  if (verification && verification.supported_ratio != null) {
+    const grounded = Math.round(verification.supported_ratio * 100);
+    pills.append(h("span", { class: grounded === 100 ? "pill good" : "pill warn" }, grounded + "% grounded"));
+  }
+  memo.append(pills);
+
+  if (verification && verification.unsupported && verification.unsupported.length) {
+    const box = h("div", { class: "callout" });
+    box.append(h("p", {}, "These sentences are not grounded in the cited passages:"));
+    for (const sentence of verification.unsupported) box.append(h("p", {}, sentence));
+    memo.append(box);
+  }
+  if (data.corrected_query) {
+    memo.append(h("p", { class: "kicker" }, "Rewritten query · " + data.corrected_query));
+  }
+
+  const votes = h("div", { class: "votes" });
+  const note = h("input", { class: "note", type: "text", placeholder: "Optional note", "aria-label": "Feedback note" });
+  const up = h("button", { class: "vote", type: "button" }, "Useful");
+  const down = h("button", { class: "vote", type: "button" }, "Off");
+  const done = h("span", { class: "done" }, "");
+  up.addEventListener("click", () => sendVote("up", note, done, up, down));
+  down.addEventListener("click", () => sendVote("down", note, done, up, down));
+  votes.append(note, up, down, done);
+  memo.append(votes);
+}
+
+async function sendVote(vote, note, done, up, down) {
+  up.disabled = true;
+  down.disabled = true;
+  try {
+    const response = await fetch("/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vote, note: note.value })
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "Could not save the vote");
+    done.textContent = vote === "up" ? "Saved as useful." : "Saved as off.";
+  } catch (error) {
+    done.textContent = error.message;
+    up.disabled = false;
+    down.disabled = false;
+  }
+}
+
+function renderCitations(hits) {
+  citations.replaceChildren(h("h2", {}, "Citations"));
+  if (!hits || !hits.length) {
+    citations.append(h("p", { class: "quiet" }, "No section was retrieved for this question."));
+    return;
+  }
+  hits.forEach((hit, i) => citations.append(citationCard(hit, i + 1)));
+}
+
+function renderTrace(rows) {
+  trace.hidden = false;
+  const total = rows.find((row) => row.step === "total");
+  const denom = (total && total.latency_s) || 1e-9;
+  const table = h("table");
+  table.append(h("thead", {}, [
+    h("tr", {}, ["Step", "Latency", "Share", "", "In", "Out", "Calls", "Cost", "Models"].map((name) => h("th", {}, name)))
+  ]));
+  const body = h("tbody");
+  for (const row of rows) {
+    const share = 100 * (Number(row.latency_s) || 0) / denom;
+    const width = Math.max(2, Math.min(100, share));
+    const bar = h("div", { class: "bar" }, [h("span", { style: "width:" + width + "%" })]);
+    const calls = (row.searches || 0) + (row.queries || 0) + (row.writes || 0);
+    const tr = h("tr", { class: row.step === "total" ? "total" : "" }, [
+      h("td", {}, String(row.step || "").replaceAll("_", " ")),
+      h("td", {}, seconds(row.latency_s)),
+      h("td", {}, share.toFixed(0) + "%"),
+      h("td", {}, [bar]),
+      h("td", {}, String(row.input_tokens || 0)),
+      h("td", {}, String(row.output_tokens || 0)),
+      h("td", {}, String(calls)),
+      h("td", {}, money(row.cost_usd)),
+      h("td", { class: "models" }, (row.models || []).join(", "))
+    ]);
+    body.append(tr);
+  }
+  table.append(body);
+  traceBody.replaceChildren(table);
+}
+
+function render(data) {
+  renderMemo(data);
+  renderCitations(data.hits);
+  renderTrace(data.trace || []);
+  memo.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function setBusy(busy) {
+  go.disabled = busy;
+  for (const chip of document.querySelectorAll(".chip")) chip.disabled = busy;
+}
+
+let ticker = 0;
+let busy = false;
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = question.value.trim();
+  if (!text || busy) return;
+  busy = true;
+  setBusy(true);
+  const started = performance.now();
+  clearInterval(ticker);
+  ticker = setInterval(() => {
+    setStatus("Searching the handbook… " + seconds((performance.now() - started) / 1000));
+  }, 200);
+  try {
+    const response = await fetch("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: text, no_cache: nocache.checked })
+    });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || "The desk could not answer");
+    setStatus("");
+    render(body);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    clearInterval(ticker);
+    busy = false;
+    setBusy(false);
+  }
+});
+
+question.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) form.requestSubmit();
+});
+
+for (const sample of EXAMPLES) {
+  const chip = h("button", { class: "chip", type: "button" }, sample);
+  chip.addEventListener("click", () => {
+    question.value = sample;
+    form.requestSubmit();
+  });
+  document.querySelector("#examples").append(chip);
+}
+</script>
+</body>
+</html>

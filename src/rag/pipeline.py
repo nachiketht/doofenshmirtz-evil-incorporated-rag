@@ -13,7 +13,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from rag.access import parse_access
+from rag.access import INTERNAL, RESTRICTED, TOP_SECRET, parse_access
 from rag.algorithms import lost_in_the_middle
 from rag.cache import SemanticCache
 from rag.config import ROUTE_MODEL, Settings
@@ -45,6 +45,7 @@ def build_cache(settings: Settings) -> SemanticCache | None:
         ttl_seconds=settings.cache_ttl,
         threshold=settings.cache_threshold,
         path=Path(settings.state_dir) / CACHE_FILE,
+        memory_only_levels=(RESTRICTED,),
     )
 
 
@@ -167,7 +168,17 @@ def slim(hits: list[dict]) -> list[dict]:
     out = []
     for hit in hits:
         if "current" in hit:
-            out.append({"heading_path": hit["heading_path"], "policy": hit["policy"]})
+            sides = [hit[key] for key in ("current", "previous") if hit.get(key)]
+            secret = any(
+                side.get("classification", TOP_SECRET) == TOP_SECRET for side in sides
+            )
+            out.append(
+                {
+                    "heading_path": hit["heading_path"],
+                    "policy": hit["policy"],
+                    "classification": TOP_SECRET if secret else INTERNAL,
+                }
+            )
         else:
             out.append({k: hit.get(k) for k in keep})
     return out
