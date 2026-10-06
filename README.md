@@ -204,13 +204,18 @@ A cached answer is reused when the new question is at least `RAG_CACHE_THRESHOLD
 corpus fingerprint. Non-restricted answers are stored in `.rag/semantic_cache.json`
 and keep aging from the time they were written, including across process restarts.
 
+```bash
+python -m rag.cache purge
+```
+
 * Each entry lives **24 hours** (`RAG_CACHE_TTL=86400`). `0` turns the time
   limit off. An expired entry is a miss and is removed on the next lookup.
 * The cache holds at most **256** answers (`RAG_CACHE_MAX`). Past that, the
   least recently used entry is dropped.
-* Removing a file from `docs/` (on the next ingest) or `purge` clears every
-  entry, in memory and on disk. A content re-ingest changes the corpus
-  fingerprint, so earlier answers stop matching and age out on their own.
+* `python -m rag.cache purge` clears every entry, in memory and on disk.
+  Removing a file from `docs/` (on the next ingest) or `rag.admin purge` does
+  the same. A content re-ingest changes the corpus fingerprint, so earlier
+  answers stop matching and age out on their own.
 * Restricted answers stay in memory only and end when the process exits.
   Restart `rag.server` after a delete so it drops the copy it loaded at startup.
 

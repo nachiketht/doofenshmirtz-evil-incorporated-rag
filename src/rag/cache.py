@@ -11,8 +11,11 @@ Bounded by ``max_entries`` (least-recently-used entry evicted first); entries
 older than ``ttl_seconds`` are ignored and purged. Optional JSON persistence.
 Configure with RAG_CACHE (on/off), RAG_CACHE_MAX, RAG_CACHE_TTL,
 RAG_CACHE_THRESHOLD.
+
+    python -m rag.cache purge
 """
 
+import argparse
 import json
 import time
 from collections import OrderedDict
@@ -135,3 +138,24 @@ class SemanticCache:
         ]
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps({"entries": saved}))
+
+
+def main(argv=None) -> int:
+    """Wipe every cached answer, in memory and on disk."""
+    from rag.config import Settings
+    from rag.pipeline import cache_file
+
+    parser = argparse.ArgumentParser(prog="python -m rag.cache")
+    parser.add_argument("command", choices=["purge"])
+    parser.parse_args(argv)
+    cache = cache_file(Settings.from_env())
+    removed = len(cache) if cache is not None else 0
+    if cache is not None:
+        cache.clear()
+    log("cache", f"purged entries={removed}")
+    print(f"purged entries={removed}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

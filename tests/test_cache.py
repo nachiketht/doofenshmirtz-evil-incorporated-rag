@@ -82,3 +82,20 @@ def test_persistence_round_trip_and_bad_files(tmp_path):
     assert len(SemanticCache(path=path)) == 0
     with pytest.raises(ValueError):
         SemanticCache(max_entries=0)
+
+
+def test_purge_command_clears_the_cache_file(tmp_path, monkeypatch, capsys):
+    from rag.cache import main
+
+    monkeypatch.setenv("RAG_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("RAG_CACHE", "1")
+    path = tmp_path / "semantic_cache.json"
+    cache = SemanticCache(path=path, memory_only_levels=("restricted",))
+    cache.store([1.0, 0.0], "default", "c", {"answer": "cake"})
+    cache.store([0.0, 1.0], "restricted", "c", {"answer": "secret"})
+    assert main(["purge"]) == 0
+    assert "purged entries=1" in capsys.readouterr().out
+    reloaded = SemanticCache(path=path, memory_only_levels=("restricted",))
+    assert len(reloaded) == 0
+    assert "cake" not in path.read_text()
+    assert "secret" not in path.read_text()
