@@ -49,6 +49,8 @@ flowchart TD
     Up --> Cat[put_document catalog row]
     Cat --> Life[lifecycle: is_latest, effective_to]
     Meta --> Life
+    Life --> Gone{File missing from docs/?}
+    Gone -->|yes| Drop[Delete that policy+version and clear the whole cache]
     Life --> Store[(Chroma collection or<br/>Pinecone index + namespace)]
     Store --> MRL{MRL on?}
     MRL -->|yes| Small[(Sibling store of truncated vectors<br/>policies_mrlN or index-mrlN)]

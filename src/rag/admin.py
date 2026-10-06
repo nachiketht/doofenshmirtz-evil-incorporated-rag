@@ -3,11 +3,13 @@
     python -m rag.admin list
     python -m rag.admin retire "HR Policy" [VERSION]   # hide from default search
     python -m rag.admin restore "HR Policy" [VERSION]
-    python -m rag.admin purge "HR Policy" VERSION --yes   # the only hard delete
+    python -m rag.admin purge "HR Policy" VERSION --yes   # hard delete
 
 Retired documents stay in the store for compares and audits. Without VERSION,
 retire/restore apply to every version of the policy. A status set here
 overrides the ``status`` in docs/manifest.json and survives re-ingest.
+Purge removes that version's chunks and clears the whole semantic cache.
+Removing a file from ``docs/`` and re-running ingest does the same.
 """
 
 import argparse
@@ -15,6 +17,8 @@ import argparse
 from adapter.factory import open_database
 from rag import lifecycle
 from rag.config import Settings
+from rag.logutil import log
+from rag.pipeline import cache_file
 from rag.version import version_key
 
 
@@ -38,9 +42,12 @@ def set_status(database, policy: str, version: str | None, status: str) -> int:
     return len(targets)
 
 
-def purge(database, policy: str, version: str) -> int:
+def purge(database, policy: str, version: str, cache=None) -> int:
     removed = database.delete_document(policy, version)
     lifecycle.apply(database)
+    if removed and cache is not None:
+        cache.clear()
+        log("admin", f"cache cleared reason=purge policy={policy} version={version}")
     return removed
 
 
@@ -60,7 +67,7 @@ def listing(database) -> str:
     return "\n".join(lines)
 
 
-def main(argv=None, database=None) -> int:
+def main(argv=None, database=None, cache=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m rag.admin")
     parser.add_argument("command", choices=["list", "retire", "restore", "purge"])
     parser.add_argument("policy", nargs="?")
@@ -68,7 +75,11 @@ def main(argv=None, database=None) -> int:
     parser.add_argument("--db", default=None, help="Chroma path override")
     parser.add_argument("--yes", action="store_true", help="confirm purge")
     args = parser.parse_args(argv)
-    database = database or open_database(Settings.from_env(), args.db)
+    if database is None:
+        settings = Settings.from_env()
+        database = open_database(settings, args.db)
+        if cache is None:
+            cache = cache_file(settings)
     if args.command == "list":
         print(listing(database))
         return 0
@@ -78,7 +89,7 @@ def main(argv=None, database=None) -> int:
         if not args.version or not args.yes:
             print("purge needs POLICY VERSION --yes (hard delete; prefer retire)")
             return 2
-        print(f"purged chunks={purge(database, args.policy, args.version)}")
+        print(f"purged chunks={purge(database, args.policy, args.version, cache)}")
         return 0
     status = "retired" if args.command == "retire" else "active"
     count = set_status(database, args.policy, args.version, status)

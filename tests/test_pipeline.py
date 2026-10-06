@@ -13,6 +13,7 @@ from rag.pipeline import (
     answer,
     build_cache,
     build_components,
+    cache_file,
     corpus_key,
     print_trace,
     with_context,
@@ -382,9 +383,13 @@ def test_build_cache_and_corpus_key(tmp_path):
     from rag.config import Settings
 
     assert build_cache(Settings(cache_enabled=False)) is None
+    assert cache_file(Settings(cache_enabled=False, state_dir=str(tmp_path))) is None
     cache = build_cache(Settings(state_dir=str(tmp_path), cache_max=3, cache_ttl=0))
     assert cache.max_entries == 3 and cache.ttl is None
     assert cache.memory_only_levels == {"restricted"}
+    cache.store([1.0], "default", "c", {"answer": "a"})
+    leftover = cache_file(Settings(cache_enabled=False, state_dir=str(tmp_path)))
+    assert leftover is not None and len(leftover) == 1
     one = [{"policy": "A", "version": "1.0", "file_hash": "x", "status": "active"}]
     assert corpus_key(one) != corpus_key([{**one[0], "status": "retired"}])
 

@@ -1,8 +1,9 @@
 """Version lifecycle: is_latest, effective_to, retire-don't-delete.
 
 Nothing from an older version is ever deleted when a new version lands. The
-only automatic delete is clearing a document's *own* previous chunks when that
-same file is re-ingested (so removed sections do not linger as ghost chunks).
+automatic deletes are a document's *own* previous chunks when that same file
+is re-ingested, and every chunk of a file that has been removed from the
+corpus.
 """
 
 from rag.logutil import log

@@ -48,6 +48,22 @@ def build_cache(settings: Settings) -> SemanticCache | None:
     )
 
 
+def cache_file(settings: Settings) -> SemanticCache | None:
+    """Answer cache to wipe after a document is deleted.
+
+    Uses the live cache when caching is on. When it is off, opens an existing
+    cache file so a delete still erases answers left on disk, and does not
+    create a file that was never there.
+    """
+    cache = build_cache(settings)
+    if cache is not None:
+        return cache
+    path = Path(settings.state_dir) / CACHE_FILE
+    if path.is_file():
+        return SemanticCache(path=path)
+    return None
+
+
 def build_components(db_path=None, settings: Settings | None = None) -> Components:
     from adapter.embedding_adapter import EmbeddingAdapter
     from adapter.factory import open_database

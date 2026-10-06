@@ -102,7 +102,13 @@ def test_main_defaults_to_docs_and_chroma(monkeypatch):
     seen = {}
 
     def fake_ingest(
-        directory, embedder, database, force=False, strategy=None, extractor=None
+        directory,
+        embedder,
+        database,
+        force=False,
+        strategy=None,
+        extractor=None,
+        cache=None,
     ):
         seen["directory"] = directory
         seen["database"] = database

@@ -12,9 +12,12 @@ For every contract-named file in ``docs/`` (PDF, DOCX, Markdown):
    embed and upsert the new ones. Other versions are never touched.
 4. Recompute lifecycle flags for the catalog: ``is_latest`` (newest *active*
    version per policy) and ``effective_to`` (next version's start date).
+5. Drop any stored document whose file is no longer in the directory, and
+   clear the whole semantic cache when that happens.
 
-Retired documents stay in the store with ``status=retired`` so compares and
-audits still work; hard deletes only happen through ``python -m rag.admin purge``.
+Retired documents that are still on disk stay in the store with
+``status=retired`` so compares and audits still work. ``python -m rag.admin
+purge`` is the explicit hard delete for a file that is still present.
 """
 
 import argparse
@@ -142,13 +145,12 @@ def ingest(
     force: bool = False,
     strategy: str = STRATEGY,
     extractor=None,
+    cache=None,
 ):
     directory = Path(directory)
     if not directory.is_dir():
         raise ValueError(f"missing directory: {directory}")
     files = contract_files(directory)
-    if not files:
-        raise ValueError(f"no policy files: {directory}")
     manifest = load_manifest(directory) if manifest is None else manifest
     if chunk_file is None:
         chunk_file = make_chunk_file(strategy)
@@ -159,6 +161,8 @@ def ingest(
     if store_tag:
         hash_key = f"{hash_key}|{store_tag}"
     stored = {(d["policy"], d["version"]): d for d in database.documents()}
+    if not files and not stored:
+        raise ValueError(f"no policy files: {directory}")
     log("ingest", f"directory={directory} files={len(files)} known={len(stored)}")
 
     pending = []  # (policy, version, records, document entry)
@@ -244,15 +248,25 @@ def ingest(
         )
 
     on_disk = {policy_and_version(path) for path in files}
-    for key in sorted(set(stored) - on_disk):
-        log("ingest", f"missing on disk policy={key[0]} version={key[1]} (kept)")
+    removed_missing = []
+    for policy, version in sorted(set(stored) - on_disk):
+        count = database.delete_document(policy, version)
+        removed_missing.append((policy, version, count))
+        log(
+            "ingest",
+            f"missing on disk policy={policy} version={version} removed={count}",
+        )
 
-    if pending or metadata_only:
+    if removed_missing and cache is not None:
+        cache.clear()
+        log("ingest", f"cache cleared reason=removed documents={len(removed_missing)}")
+
+    if pending or metadata_only or removed_missing:
         lifecycle.apply(database)
     log(
         "ingest",
         f"finished stored={len(pending)} metadata={len(metadata_only)} "
-        f"skipped={skipped}",
+        f"removed={len(removed_missing)} skipped={skipped}",
     )
     return None
 
@@ -272,6 +286,8 @@ def parse_args(argv):
 
 
 def main(argv=None):
+    from rag.pipeline import cache_file
+
     args = parse_args(argv)
     settings = Settings.from_env()
     error = ingest(
@@ -281,6 +297,7 @@ def main(argv=None):
         force=args.force,
         strategy=args.chunker or settings.chunker,
         extractor=build_extractor(settings.metadata_extractor),
+        cache=cache_file(settings),
     )
     if error:
         print(error)

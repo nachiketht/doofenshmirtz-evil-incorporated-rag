@@ -163,9 +163,12 @@ python -m rag.chunking stats --strategy table_aware
   Everything is embedded before the first write, so a failed run (e.g. Ollama
   down) leaves the store untouched. Newer versions automatically supersede
   older ones (`is_latest`, effective-to dates).
-* Retired versions drop out of normal lookups but stay available for compares;
-  `purge` deletes them. A status set with `rag.admin retire|restore` overrides
-  the manifest's `status` and survives re-ingest.
+* A file removed from `docs/` is deleted from the store on the next ingest,
+  and the whole semantic cache is cleared. Retired versions that are still on
+  disk drop out of normal lookups but stay available for compares; `purge`
+  deletes them and clears the cache the same way. A status set with
+  `rag.admin retire|restore` overrides the manifest's `status` and survives
+  re-ingest.
 * Backends: `RAG_DB_BACKEND=chroma` (default, local) or `pinecone`
   (`PINECONE_API_KEY`, `PINECONE_INDEX`, `PINECONE_NAMESPACE`).
 
@@ -193,8 +196,23 @@ access gate -> embed -> semantic cache -> catalog -> route (lookup/compare)
 | Lost-in-the-middle context ordering | `rag/algorithms.py` | `RAG_LOST_IN_MIDDLE` |
 | Parent-section expansion for generation | `rag/pipeline.py` | `RAG_EXPAND_PARENTS` |
 | Matryoshka two-stage search (truncated-vector prefetch, full-vector rescoring) | `rag/matryoshka.py` | `RAG_MRL_DIMS`, `RAG_MRL_PREFETCH` |
-| Semantic cache: LRU + TTL, keyed by access level and corpus fingerprint | `rag/cache.py` | `RAG_CACHE*` |
+| Semantic cache: 24h TTL, 256-entry LRU, full clear on delete | `rag/cache.py` | `RAG_CACHE`, `RAG_CACHE_MAX`, `RAG_CACHE_TTL`, `RAG_CACHE_THRESHOLD` |
 | Tracing: per-step latency, tokens, cost | `rag/tracing.py` | `RAG_COST_TABLE` |
+
+A cached answer is reused when the new question is at least `RAG_CACHE_THRESHOLD`
+(0.95) cosine-similar, asked at the same access level, and aimed at the same
+corpus fingerprint. Non-restricted answers are stored in `.rag/semantic_cache.json`
+and keep aging from the time they were written, including across process restarts.
+
+* Each entry lives **24 hours** (`RAG_CACHE_TTL=86400`). `0` turns the time
+  limit off. An expired entry is a miss and is removed on the next lookup.
+* The cache holds at most **256** answers (`RAG_CACHE_MAX`). Past that, the
+  least recently used entry is dropped.
+* Removing a file from `docs/` (on the next ingest) or `purge` clears every
+  entry, in memory and on disk. A content re-ingest changes the corpus
+  fingerprint, so earlier answers stop matching and age out on their own.
+* Restricted answers stay in memory only and end when the process exits.
+  Restart `rag.server` after a delete so it drops the copy it loaded at startup.
 
 ## Feedback
 

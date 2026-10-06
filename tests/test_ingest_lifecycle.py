@@ -317,14 +317,54 @@ def test_enabling_matryoshka_reembeds_unchanged_files(docs, tmp_path):
     assert again.texts == []
 
 
-def test_missing_files_are_kept_not_deleted(docs, database, caplog):
+def test_missing_files_are_deleted_and_the_cache_is_cleared(docs, database, caplog):
     import logging
+
+    from rag.cache import SemanticCache
 
     caplog.set_level(logging.INFO, logger="ingest")
     v1 = write(docs, "1.0", V1)
     write(docs, "2.0", V2)
-    ingest(docs, CountingEmbedder(), database)
+    cache = SemanticCache(path=docs.parent / "cache.json")
+    cache.store([1.0, 0.0], "default", "corpus", {"answer": "still here"})
+    ingest(docs, CountingEmbedder(), database, cache=cache)
+    assert len(cache) == 1  # a re-ingest that changes nothing leaves the cache
     v1.unlink()
+    ingest(docs, CountingEmbedder(), database, cache=cache)
+    assert ("Inator Safety Policy", "1.0") not in catalog(database)
+    assert database.get({"version": "1.0"}) == []
+    assert catalog(database)[("Inator Safety Policy", "2.0")]["is_latest"] is True
+    assert len(cache) == 0
+    assert cache.path.read_text().strip() in {"", '{"entries": []}'}
+    assert "missing on disk" in caplog.text and "cache cleared" in caplog.text
+
+
+def test_deleting_every_file_empties_the_store(docs, database):
+    from rag.cache import SemanticCache
+
+    path = write(docs, "1.0", V1)
+    cache = SemanticCache()
+    cache.store([1.0, 0.0], "default", "corpus", {"answer": "gone"})
+    ingest(docs, CountingEmbedder(), database, cache=cache)
+    path.unlink()
+    ingest(docs, CountingEmbedder(), database, cache=cache)
+    assert catalog(database) == {}
+    assert database.get() == []
+    assert len(cache) == 0
+
+
+def test_purge_clears_the_whole_cache(docs, database):
+    from rag.cache import SemanticCache
+
+    write(docs, "1.0", V1)
+    write(docs, "2.0", V2)
     ingest(docs, CountingEmbedder(), database)
-    assert ("Inator Safety Policy", "1.0") in catalog(database)
-    assert "missing on disk" in caplog.text
+    cache = SemanticCache(path=docs.parent / "purge-cache.json")
+    cache.store([1.0, 0.0], "default", "corpus", {"answer": "old"})
+    cache.store([0.0, 1.0], "restricted", "corpus", {"answer": "secret"})
+    assert admin.main(
+        ["purge", "Inator Safety Policy", "1.0", "--yes"], database, cache
+    ) == 0
+    assert set(catalog(database)) == {("Inator Safety Policy", "2.0")}
+    assert len(cache) == 0
+    assert "secret" not in cache.path.read_text()
