@@ -768,7 +768,6 @@ def main(argv=None, trace: bool = False) -> int:
                         "trace_id": result.get("trace_id"),
                         "queries": result.get("queries"),
                         "corrected_query": result.get("corrected_query"),
-                        "verification": result.get("verification"),
                         "hits": json_hits(result.get("hits", [])),
                         "trace": result.get("trace", []),
                         "latency_s": round(elapsed, 6),

@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 
 import pytest
@@ -294,7 +293,7 @@ def test_low_calibrated_rerank_score_triggers_not_found():
     assert found["kind"] == "not_found"
 
 
-def test_pipeline_trace_cache_reorder_and_verify(tmp_path, capsys):
+def test_pipeline_trace_cache_and_reorder(tmp_path, capsys):
     embedder = HashEmbedder()
     database = store(HR, embedder)
     cache = SemanticCache(path=tmp_path / "cache.json")
@@ -304,7 +303,6 @@ def test_pipeline_trace_cache_reorder_and_verify(tmp_path, capsys):
     first = answer("vacation leave days", parts, options)
     assert first["cached"] is False
     assert first["kind"] == "lookup"
-    assert first["verification"]["supported_ratio"] == 1.0
     steps = [row["step"] for row in first["trace"]]
     for step in (
         "access",
@@ -317,7 +315,6 @@ def test_pipeline_trace_cache_reorder_and_verify(tmp_path, capsys):
         "rerank",
         "reorder",
         "generate",
-        "verify",
         "cache_store",
         "total",
     ):
@@ -346,21 +343,6 @@ def test_not_found_answer_is_not_cached():
     assert result["kind"] == "not_found"
     assert result["answer"] == "No policy passage answers this question."
     assert len(cache) == 0
-
-
-def test_unsupported_sentences_are_logged(caplog):
-    class Hallucinating(ScriptedModel):
-        def generate(self, prompt, system=None):
-            if system is None:
-                return super().generate(prompt, system)
-            return "Unrelated moon cheese conspiracy with no policy overlap."
-
-    caplog.set_level(logging.INFO)
-    embedder = HashEmbedder()
-    parts = components(store(HR, embedder), embedder, Hallucinating())
-    result = answer("vacation leave days", parts)
-    assert result["verification"]["unsupported"]
-    assert "unsupported=" in caplog.text
 
 
 def test_parent_text_becomes_generation_context():

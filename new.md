@@ -29,8 +29,7 @@ flowchart TD
     Low -->|ok| LIM[Lost-in-the-middle reorder]
     Cmp --> Gen
     LIM --> Gen[Generate gemma3:12b + citations]
-    Gen --> V[Lexical verify]
-    V --> Store[Cache store<br/>restricted stays in memory]
+    Gen --> Store[Cache store<br/>restricted stays in memory]
     Store --> Out
 ```
 

@@ -17,7 +17,6 @@ def sample(question, no_cache=False):
         "cached": no_cache is False and question == "cached",
         "trace_id": "trace123",
         "queries": [question],
-        "verification": {"supported_ratio": 1.0, "unsupported": []},
         "hits": [
             {
                 "policy": "Self-Destruct Button Policy",

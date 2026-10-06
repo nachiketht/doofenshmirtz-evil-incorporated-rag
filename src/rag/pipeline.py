@@ -1,8 +1,8 @@
-"""End-to-end question answering with tracing, caching and verification.
+"""End-to-end question answering with tracing and caching.
 
     access gate -> embed -> semantic cache -> retrieve (route, multi-query,
     hybrid, rerank, MMR, self-correct) -> lost-in-the-middle reorder ->
-    generate -> verify -> cache store
+    generate -> cache store
 
 Everything runs inside one ``Tracer`` so the result carries a per-step table of
 latency, tokens and cost. The access phrase is stripped by the gate and never
@@ -18,10 +18,9 @@ from rag.algorithms import lost_in_the_middle
 from rag.cache import SemanticCache
 from rag.config import ROUTE_MODEL, Settings
 from rag.generate import generate
-from rag.logutil import log, stage
+from rag.logutil import stage
 from rag.retrieve import RetrievalOptions, load_catalog, retrieve
 from rag.tracing import Tracer
-from rag.verify import verify
 
 CACHE_FILE = "semantic_cache.json"
 
@@ -113,7 +112,6 @@ def answer(question: str, components: Components, options=None, tracer=None) -> 
                     cached["kind"],
                     cached.get("hits", []),
                     cached=True,
-                    verification=cached.get("verification"),
                 )
         found = retrieve(
             access.question,
@@ -133,10 +131,6 @@ def answer(question: str, components: Components, options=None, tracer=None) -> 
             with stage("reorder"):
                 hits = lost_in_the_middle(hits)
         text = generate(access.question, kind, hits, components.answerer)
-        with stage("verify"):
-            verification = verify(text, kind, hits) if hits else None
-        if verification and verification["unsupported"]:
-            log("verify", f"unsupported={len(verification['unsupported'])}")
         if cache is not None and hits and kind != "not_found":
             with stage("cache_store"):
                 cache.store(
@@ -147,7 +141,6 @@ def answer(question: str, components: Components, options=None, tracer=None) -> 
                         "answer": text,
                         "kind": kind,
                         "hits": slim(hits),
-                        "verification": verification,
                     },
                 )
     return result(
@@ -157,7 +150,6 @@ def answer(question: str, components: Components, options=None, tracer=None) -> 
         kind,
         hits,
         cached=False,
-        verification=verification,
         extra=found,
     )
 
@@ -184,7 +176,7 @@ def slim(hits: list[dict]) -> list[dict]:
     return out
 
 
-def result(tracer, access, text, kind, hits, cached, verification=None, extra=None):
+def result(tracer, access, text, kind, hits, cached, extra=None):
     extra = extra or {}
     return {
         "answer": text,
@@ -193,7 +185,6 @@ def result(tracer, access, text, kind, hits, cached, verification=None, extra=No
         "access": access.level,
         "question": access.question,
         "cached": cached,
-        "verification": verification,
         "queries": extra.get("queries", [access.question]),
         "corrected_query": extra.get("corrected_query"),
         "trace_id": tracer.trace_id,

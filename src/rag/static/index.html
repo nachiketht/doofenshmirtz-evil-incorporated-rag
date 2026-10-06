@@ -221,15 +221,6 @@
   }
   .pill.warn { background: #ffe1d4; color: #8a3416; }
   .pill.good { background: #e5f6c4; color: #2d4a09; }
-  .callout {
-    margin-top: 16px;
-    padding: 12px 14px;
-    border-left: 3px solid var(--ember);
-    background: #fff6f1;
-    color: #6d2c14;
-    font-size: 14px;
-  }
-  .callout p { margin: 0 0 6px; }
   .votes {
     display: flex;
     gap: 8px;
@@ -405,7 +396,7 @@
     <article class="memo empty" id="memo">
       <p class="kicker">Memo</p>
       <h2>Ask a policy question.</h2>
-      <p class="prose">The answer lands here, with a check that each sentence is grounded in a retrieved passage. Top-secret documents answer only when the question starts with the access phrase.</p>
+      <p class="prose">The answer lands here. Top-secret documents answer only when the question starts with the access phrase.</p>
     </article>
 
     <aside class="panel citations" id="citations">
@@ -544,19 +535,8 @@ function renderMemo(data) {
     const accessName = { default: "Open", restricted: "Restricted" }[data.access] || data.access;
     pills.append(h("span", { class: data.access === "restricted" ? "pill warn" : "pill" }, accessName));
   }
-  const verification = data.verification;
-  if (verification && verification.supported_ratio != null) {
-    const grounded = Math.round(verification.supported_ratio * 100);
-    pills.append(h("span", { class: grounded === 100 ? "pill good" : "pill warn" }, grounded + "% grounded"));
-  }
   memo.append(pills);
 
-  if (verification && verification.unsupported && verification.unsupported.length) {
-    const box = h("div", { class: "callout" });
-    box.append(h("p", {}, "These sentences are not grounded in the cited passages:"));
-    for (const sentence of verification.unsupported) box.append(h("p", {}, sentence));
-    memo.append(box);
-  }
   if (data.corrected_query) {
     memo.append(h("p", { class: "kicker" }, "Rewritten query · " + data.corrected_query));
   }

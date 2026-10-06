@@ -92,7 +92,7 @@ python -m rag.server --host 127.0.0.1 --port 8080
 
 Open the printed URL in a browser. Type a question (prefix the access phrase
 for top-secret docs, e.g. `ABCDEF: What colour is Agent P?`). The page shows
-the answer, cited sections, verification, and the latency / token / cost
+the answer, cited sections, and the latency / token / cost
 trace. Useful / Off records the same vote as `python -m rag.feedback`.
 
 ```bash
@@ -175,7 +175,7 @@ python -m rag.chunking stats --strategy table_aware
 access gate -> embed -> semantic cache -> catalog -> route (lookup/compare)
   -> query rewrite (multi-query) -> dense ANN per query -> BM25 -> RRF fusion
   -> rerank -> MMR -> self-correction -> lost-in-the-middle ordering
-  -> parent expansion -> generate -> verify -> cache store
+  -> parent expansion -> generate -> cache store
 ```
 
 | Technique | Where | Setting |
@@ -194,7 +194,6 @@ access gate -> embed -> semantic cache -> catalog -> route (lookup/compare)
 | Parent-section expansion for generation | `rag/pipeline.py` | `RAG_EXPAND_PARENTS` |
 | Matryoshka two-stage search (truncated-vector prefetch, full-vector rescoring) | `rag/matryoshka.py` | `RAG_MRL_DIMS`, `RAG_MRL_PREFETCH` |
 | Semantic cache: LRU + TTL, keyed by access level and corpus fingerprint | `rag/cache.py` | `RAG_CACHE*` |
-| Answer verification (unsupported sentences flagged) | `rag/verify.py` | — |
 | Tracing: per-step latency, tokens, cost | `rag/tracing.py` | `RAG_COST_TABLE` |
 
 ## Feedback

@@ -5,7 +5,7 @@
 
 ``GET /`` serves the page. ``POST /ask`` with ``{"question": "..."}`` returns
 the same JSON shape as ``python -m rag.trace --json``: answer, citations,
-verification and the per-step latency / token / cost trace. The access phrase
+and the per-step latency / token / cost trace. The access phrase
 is stripped by the pipeline before it reaches models, the cache or feedback.
 """
 
@@ -42,7 +42,6 @@ def public_result(result: dict, latency_s: float) -> dict:
         "trace_id": result.get("trace_id"),
         "queries": result.get("queries") or [],
         "corrected_query": result.get("corrected_query"),
-        "verification": result.get("verification"),
         "hits": json_hits(result.get("hits") or []),
         "trace": result.get("trace") or [],
         "latency_s": round(latency_s, 6),
