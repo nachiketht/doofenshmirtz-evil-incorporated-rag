@@ -38,10 +38,12 @@ Everything is configured through environment variables or the gitignored
 
 ```bash
 python scripts/demo.py                       # offline tour, no models or keys needed
+python scripts/compare_chunkers.py -q "How big must a self-destruct button be?"
 python -m rag.ingest                         # read docs/, write ./chroma
 python -m rag.retrieve "How big must a self-destruct button be?"
 python -m rag.trace "What changed about password length between Password and Access Policy v1 and v3?"
 python -m rag.trace "How many days of pet leave for a platypus?" --json
+python -m rag.server                         # policy desk at http://127.0.0.1:8000
 ```
 
 `python -m rag.trace` prints the answer, then a table with one row per pipeline
@@ -50,22 +52,52 @@ USD, models) and a total row. `--json` prints the same data as JSON, and
 `--no-cache` bypasses the semantic cache. Prices come from
 `src/rag/model_costs.json` (local Ollama models cost $0).
 
-## Policy desk
+## Policy desk (HTTP server)
+
+Same pipeline as `python -m rag.trace`, served as a page and a small JSON API.
+Ingest first so the store exists. From this container, set `OLLAMA_HOST` the
+same way as the CLI.
 
 ```bash
-python -m rag.server                       # http://127.0.0.1:8000
+python -m rag.server                         # http://127.0.0.1:8000
+python -m rag.server --host 0.0.0.0 --port 8000
 python -m rag.server --host 127.0.0.1 --port 8080
 ```
 
-Open that URL and ask a question. The page shows the answer, the cited
-sections (policy, version, heading, passage), whether each sentence is
-grounded, and a per-step latency / token / cost trace. Useful / Off saves the
-same feedback as `python -m rag.feedback`.
+Open the printed URL in a browser. Type a question (prefix the access phrase
+for top-secret docs, e.g. `ABCDEF: What colour is Agent P?`). The page shows
+the answer, cited sections, verification, and the latency / token / cost
+trace. Useful / Off records the same vote as `python -m rag.feedback`.
 
-`POST /ask` with `{"question": "...", "no_cache": false}` returns the same
-JSON as `python -m rag.trace --json`. `GET /health` reports that the process
-is up. The first question loads the models and the vector store; later
-questions reuse them.
+```bash
+curl -s http://127.0.0.1:8000/health
+# {"ok": true}
+
+curl -s http://127.0.0.1:8000/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"How big must a self-destruct button be?"}'
+
+curl -s http://127.0.0.1:8000/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"ABCDEF: What colour is Agent P?","no_cache":true}'
+
+curl -s http://127.0.0.1:8000/feedback \
+  -H 'Content-Type: application/json' \
+  -d '{"vote":"up"}'
+# after an answer: {"ok": true, "vote": "up"}
+```
+
+| Method | Path | Body |
+| --- | --- | --- |
+| `GET` | `/` | HTML policy desk |
+| `GET` | `/health` | process is up |
+| `POST` | `/ask` | `{"question": "...", "no_cache": false}` — same JSON as `rag.trace --json` |
+| `POST` | `/feedback` | `{"vote": "up"\|"down", "note": "..."}` — rates the last answer |
+
+The first `/ask` loads models and the vector store; later requests reuse them.
+Requests are handled one at a time. Embedding vectors are never sent on the
+wire. The access phrase is stripped before models, the cache, or feedback see
+the question.
 
 ## Restricted documents
 
@@ -95,7 +127,18 @@ answers are kept in memory only (never written to `.rag/`).
 python -m rag.ingest [docs] [chroma] [--force] [--chunker contextual]
 python -m rag.admin list | retire POLICY VERSION | restore POLICY VERSION | purge POLICY VERSION --yes
 python -m rag.chunking stats --strategy table_aware
+python scripts/compare_chunkers.py "How big must a self-destruct button be?"
+python scripts/compare_chunkers.py -q "What colour is Agent P?" --strategy recursive --strategy structural
 ```
+
+`compare_chunkers.py` runs the same question through each ready chunker and
+prints search vs generate latency. Pass the query as a positional argument or
+with `-q` / `--question`. Offline (default) uses a hashing embedder and a
+temp Chroma store per strategy. `--live` uses Ollama and the configured
+reranker but still writes **local Chroma**, so Pinecone is not overwritten.
+`--keep DIR` reuses those stores; `--force` re-ingests them. Cache is off.
+Generate usually dominates `--live` totals; the search column is the chunker
+effect.
 
 * Files must be named `Doofenshmirtz Evil Inc - <Title> v<N.N>.<pdf|docx|md>`.
   `docs/manifest.json` adds department, document type, classification and
