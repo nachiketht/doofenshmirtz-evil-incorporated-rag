@@ -151,7 +151,7 @@ def test_multi_query_rewrites_are_fused():
 
 def test_multi_query_survives_a_failed_rewrite():
     class Failing(ScriptedModel):
-        def generate(self, prompt, system=None):
+        def generate(self, prompt, system=None, **_kwargs):
             if "different search queries" in prompt:
                 raise TimeoutError
             return super().generate(prompt, system)
@@ -241,7 +241,7 @@ def test_self_correction_rewrites_once_then_gives_up():
     assert lost["hits"] == []
 
 
-def test_faq_hit_broadens_to_its_parent_policy_despite_a_high_score():
+def test_lookup_reaches_the_handbook_when_the_router_names_only_the_faq():
     embedder = HashEmbedder()
     rows = [
         record(
@@ -274,12 +274,10 @@ def test_faq_hit_broadens_to_its_parent_policy_despite_a_high_score():
         options=RetrievalOptions(self_correct=True, min_cosine=0.0),
         access=parse_access("x", ""),
     )
-    assert found.get("broadened") is True
     assert any(hit["policy"] == "HR Policy" for hit in found["hits"])
-    assert all(hit["policy"] != "Lab Policy" for hit in found["hits"])
 
 
-def test_unnamed_faq_broadens_to_every_latest_document():
+def test_lookup_reaches_the_handbook_when_the_faq_names_no_parent():
     embedder = HashEmbedder()
     rows = [
         record(
@@ -306,11 +304,10 @@ def test_unnamed_faq_broadens_to_every_latest_document():
         options=RetrievalOptions(self_correct=True, min_cosine=0.0),
         access=parse_access("x", ""),
     )
-    assert found.get("broadened") is True
     assert any(hit["policy"] == "Expense Reimbursement Policy" for hit in found["hits"])
 
 
-def test_wrong_policy_guess_broadens_to_the_rest_of_the_catalog():
+def test_lookup_reaches_the_answer_when_the_router_names_the_wrong_policy():
     embedder = HashEmbedder()
     rows = HR + [
         record(
@@ -343,7 +340,6 @@ def test_wrong_policy_guess_broadens_to_the_rest_of_the_catalog():
         ),
         access=parse_access("x", ""),
     )
-    assert found.get("broadened") is True
     assert any("teal" in hit["text"] for hit in found["hits"])
 
 
@@ -374,6 +370,8 @@ def test_pipeline_trace_cache_and_reorder(tmp_path, capsys):
     first = answer("vacation leave days", parts, options)
     assert first["cached"] is False
     assert first["kind"] == "lookup"
+    assert first["retrieved"]
+    assert first["retrieved"][0]["id"] == first["hits"][0]["id"]
     steps = [row["step"] for row in first["trace"]]
     for step in (
         "access",

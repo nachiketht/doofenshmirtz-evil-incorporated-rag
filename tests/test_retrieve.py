@@ -54,7 +54,7 @@ class FakeModel:
         self.replies = list(replies)
         self.prompts = []
 
-    def generate(self, prompt):
+    def generate(self, prompt, **_kwargs):
         self.prompts.append(prompt)
         return self.replies.pop(0)
 
@@ -143,7 +143,23 @@ def test_lookup_drops_older_versions(tmp_path):
     assert FakeEmbedder([1.0, 0.0]).embed(["cake"], "query") == [[1.0, 0.0]]
 
 
-def test_lookup_keeps_a_named_version(tmp_path):
+def test_lookup_keeps_a_version_the_question_names(tmp_path):
+    rows = [
+        record("HR Policy", "2.0", "3. Leave", "vacation days"),
+        record("HR Policy", "1.0", "3. Leave", "birthday cake"),
+    ]
+    found = retrieve(
+        "what did HR Policy 1.0 say about cake",
+        FakeEmbedder([1.0, 0.0]),
+        FakeModel(['{"kind":"lookup","policy":"HR Policy","version":""}']),
+        store(tmp_path / "named", rows, [[1.0, 0.0], [0.0, 1.0]]),
+        FakeReranker(),
+    )
+    assert found["hits"][0]["text"] == "birthday cake"
+    assert found["hits"][0]["version"] == "1.0"
+
+
+def test_lookup_ignores_a_version_the_router_invents(tmp_path):
     rows = [
         record("HR Policy", "2.0", "3. Leave", "vacation days"),
         record("HR Policy", "1.0", "3. Leave", "birthday cake"),
@@ -154,11 +170,11 @@ def test_lookup_keeps_a_named_version(tmp_path):
         [[1.0, 0.0], [0.0, 1.0]],
         ['{"kind":"lookup","policy":"HR Policy","version":"1.0"}'],
     )
-    assert documents[0] == ["birthday cake"]
-    assert found["hits"][0]["version"] == "1.0"
+    assert documents[0] == ["vacation days"]
+    assert found["hits"][0]["version"] == "2.0"
 
 
-def test_lookup_can_name_a_policy_without_a_version(tmp_path):
+def test_lookup_searches_every_latest_document(tmp_path):
     rows = [
         record("HR Policy", "2.0", "3. Leave", "vacation days"),
         record("HR Policy", "1.0", "3. Leave", "birthday cake"),
@@ -170,7 +186,7 @@ def test_lookup_can_name_a_policy_without_a_version(tmp_path):
         [[1.0, 0.0], [0.0, 1.0], [0.2, 0.2]],
         ['{"kind":"lookup","policy":"HR Policy","version":""}'],
     )
-    assert documents[0] == ["vacation days"]
+    assert set(documents[0]) == {"vacation days", "drill"}
 
 
 def test_aliases_collapse_to_one_heading(tmp_path):
@@ -242,7 +258,7 @@ def test_compare_with_nothing_retrieved_is_not_found(tmp_path):
     assert found["hits"] == []
 
 
-def test_lookup_can_target_two_policies(tmp_path):
+def test_lookup_is_not_limited_to_the_policies_the_router_lists(tmp_path):
     rows = [
         record("HR Policy", "2.0", "3. Leave", "birthday cake"),
         record("Travel Policy", "1.0", "1. Blimps", "birthday cake on a blimp"),
@@ -262,8 +278,11 @@ def test_lookup_can_target_two_policies(tmp_path):
         store(tmp_path / "two", rows, [[1.0, 0.0], [0.2, 0.8], [0.0, 1.0]]),
         FakeReranker(),
     )
-    assert {hit["policy"] for hit in found["hits"]} <= {"HR Policy", "Travel Policy"}
-    assert found["hits"]
+    assert {hit["policy"] for hit in found["hits"]} == {
+        "HR Policy",
+        "Travel Policy",
+        "Health & Wellness Policy",
+    }
 
 
 def test_compare_with_one_version_has_no_previous_side(tmp_path):

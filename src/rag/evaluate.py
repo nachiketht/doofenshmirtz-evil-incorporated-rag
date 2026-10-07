@@ -45,7 +45,9 @@ def run_case(case, components, options, phrase, k, judge=None):
     latency = time.perf_counter() - started
     kind = result["kind"]
     expected = expected_keys(case.get("kind", "lookup"), case["chunks"])
-    ranked = ranked_keys(kind, result["hits"])
+    # Score the reranked retrieval list. ``hits`` has siblings inserted and
+    # has been reordered for the generator, which pushes true matches past k.
+    ranked = ranked_keys(kind, result.get("retrieved", result["hits"]))
     text = result["answer"]
     leaked = case.get("leak_check", False) and (
         secret_hit(result["hits"]) or not answer_ok(text, [], case["must_not_contain"])

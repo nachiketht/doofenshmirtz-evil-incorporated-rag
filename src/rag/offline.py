@@ -93,7 +93,7 @@ class HeuristicModel:
 
     name = "heuristic-model"
 
-    def generate(self, prompt: str, system: str | None = None) -> str:
+    def generate(self, prompt: str, system: str | None = None, **_kwargs) -> str:
         if prompt.startswith(REWRITE_MARK):
             return "[]"
         if prompt.startswith(CORRECT_MARK):

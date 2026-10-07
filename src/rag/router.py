@@ -7,8 +7,7 @@ from rag.logutil import log
 PROMPT = """Reply with one JSON object only: {{"kind":"lookup"|"compare","policy":"","version":"","policies":[]}}
 Use compare only when the question asks what changed, what's new, a diff, or how one version of a policy differs from another.
 A question that names an old version without asking for a change is lookup.
-policy must be one catalog name, or empty. policies lists every catalog name the question needs when it asks about more than one policy; otherwise leave it empty. version is the named version for a single-policy lookup, or empty.
-For a quantity (how many, how long, how much, what amount), set policy to the canonical policy, not an FAQ. If an FAQ is also relevant, list that FAQ in policies so the parent policy and the FAQ are both searched.
+policy must be one catalog name, or empty. policies lists every catalog name the question needs when it asks about more than one policy; otherwise leave it empty. version is the named version for a single-policy lookup, or empty. Leave version empty unless the question itself names one.
 
 Catalog:
 {catalog}
@@ -19,8 +18,6 @@ what's new in preparedness -> {{"kind":"compare","policy":"Preparedness Policy",
 diff the time policy -> {{"kind":"compare","policy":"Time & Usage Policy","version":""}}
 how did v2 differ for HR Policy -> {{"kind":"compare","policy":"HR Policy","version":""}}
 what did HR Policy 1.0 say about leave -> {{"kind":"lookup","policy":"HR Policy","version":"1.0"}}
-how many days off for adopting a dog -> {{"kind":"lookup","policy":"HR Policy","version":"","policies":["Pet Leave FAQ"]}}
-how many tokens each cycle -> {{"kind":"lookup","policy":"Time & Usage Policy","version":"","policies":["Token Economy FAQ"]}}
 
 Question:
 {question}
@@ -36,7 +33,11 @@ def route(question: str, model, policies: dict) -> dict:
         f"{name}: {', '.join(versions)}" for name, versions in sorted(policies.items())
     )
     decision = parse_route(
-        model.generate(PROMPT.format(catalog=catalog, question=question)),
+        model.generate(
+            PROMPT.format(catalog=catalog, question=question),
+            options={"temperature": 0},
+            response_format="json",
+        ),
         policies,
     )
     log(

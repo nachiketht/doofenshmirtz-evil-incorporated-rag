@@ -20,6 +20,7 @@ from rag.algorithms import (
     REWRITE_PROMPT,
     compare_targets,
     mentioned_date,
+    mentioned_versions,
     mmr,
     parse_queries,
     rrf,
@@ -37,7 +38,7 @@ from rag.version import version_key
 
 RRF = 60
 FUSE_N = 20
-TOP_N = 3
+TOP_N = 5
 CANDIDATE_K = 50
 ALIASES = {
     "Time and Usage Policy": "Time & Usage Policy",
@@ -189,23 +190,19 @@ def widen_for_faq(pairs, hits, active) -> list[tuple]:
     return widened
 
 
-def decision_pairs(policies: dict, decision: dict) -> list[tuple]:
-    """Latest (or named) versions for the policies the router selected.
+def scoped_pairs(
+    question: str, active: dict, decision: dict
+) -> tuple[list[tuple], bool]:
+    """Latest version of every document, unless the question names a version.
 
-    An empty policy with a ``policies`` list limits the search to those
-    documents. No names at all searches every latest version.
+    The named version is taken from the question and searched on the policy
+    the router selected. A version the router invents is ignored.
     """
-    if not policies:
-        return []
-    if decision.get("policy"):
-        return lookup_pairs(policies, decision["policy"], decision.get("version") or "")
-    named = [name for name in decision.get("policies") or [] if name in policies]
-    if named:
-        pairs = []
-        for name in named:
-            pairs.extend(lookup_pairs(policies, name, ""))
-        return pairs
-    return lookup_pairs(policies, "", "")
+    policy = decision.get("policy") or ""
+    named = mentioned_versions(question, active.get(policy, ()))
+    if policy and named:
+        return [(policy, named[0])], True
+    return lookup_pairs(active, "", ""), False
 
 
 def cosine(left: list[float], right: list[float]) -> float:
@@ -666,6 +663,7 @@ def lookup(
     options,
 ):
     as_of = options.as_of or mentioned_date(question)
+    pinned = False
     if as_of and not decision["version"]:
         forced = lifecycle.in_force(entries, as_of)
         selected = decision.get("policies") or []
@@ -677,7 +675,7 @@ def lookup(
         where = base_filter(level, options, active_only=False)
         log("retrieve", f"as_of={as_of} documents={len(pairs)}")
     else:
-        pairs = decision_pairs(active, decision)
+        pairs, pinned = scoped_pairs(question, active, decision)
         where = base_filter(level, options, active_only=True)
     if not pairs:
         log("retrieve", "candidates=0")
@@ -702,7 +700,7 @@ def lookup(
     meta["relevance"] = signal
     # An FAQ can outscore the handbook it summarizes. High FAQ scores skip the
     # low-relevance broaden below, so open the parent policy before that check.
-    if any(is_faq(hit) for hit in hits):
+    if not pinned and any(is_faq(hit) for hit in hits):
         widened = widen_for_faq(pairs, hits, active)
         if len(widened) > len(pairs):
             with stage("self_correct"):
@@ -720,7 +718,8 @@ def lookup(
     # "Agent P" -> Sighting Reports, while colour lives in another document)
     # is widened to every latest document before we rewrite the query.
     if (
-        is_low(signal, options)
+        not pinned
+        and is_low(signal, options)
         and decision.get("policy")
         and not decision.get("version")
     ):

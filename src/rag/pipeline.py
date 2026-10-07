@@ -251,6 +251,7 @@ def result(tracer, access, text, kind, hits, cached, extra=None):
         "answer": text,
         "kind": kind,
         "hits": hits,
+        "retrieved": extra.get("hits", hits),
         "access": access.level,
         "question": access.question,
         "cached": cached,

@@ -45,7 +45,7 @@ class ScriptedModel:
         self.corrected = corrected
         self.prompts = []
 
-    def generate(self, prompt, system=None):
+    def generate(self, prompt, system=None, **_kwargs):
         self.prompts.append(prompt)
         if prompt.startswith(REWRITE_MARK):
             return self.rewrites or "[]"

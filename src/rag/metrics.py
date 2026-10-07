@@ -83,7 +83,9 @@ def _phrase_pattern(phrase: str) -> re.Pattern:
                 token = re.escape(part[:-1]) + r"s?"
             pieces.append(token)
         body = r"[\s-]+".join(pieces)
-    return re.compile(rf"(?<![a-z0-9,]){body}(?![a-z0-9,])")
+    # A comma after a word ("abandoned,") is punctuation. A comma between
+    # digits is part of the number, so "1,000" does not match inside "1,000,000".
+    return re.compile(rf"(?<![a-z0-9])(?<!\d,){body}(?![a-z0-9])(?!,\d)")
 
 
 def contains_phrase(text: str, phrase: str) -> bool:

@@ -51,7 +51,9 @@ def test_generation_adapter_forwards_options_and_format():
     client = FakeClient({"response": "{}"})
 
     def generate(model, prompt, stream, **kwargs):
-        client.calls.append({"model": model, "prompt": prompt, "stream": stream, **kwargs})
+        client.calls.append(
+            {"model": model, "prompt": prompt, "stream": stream, **kwargs}
+        )
         return client.response
 
     client.generate = generate
@@ -69,8 +71,8 @@ class RecordingModel:
     def __init__(self):
         self.calls = []
 
-    def generate(self, prompt, system=None):
-        self.calls.append({"prompt": prompt, "system": system})
+    def generate(self, prompt, system=None, **kwargs):
+        self.calls.append({"prompt": prompt, "system": system, **kwargs})
         return "answer"
 
 
