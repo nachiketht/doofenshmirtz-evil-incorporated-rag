@@ -284,3 +284,11 @@ python scripts/generate_corpus.py           # rewrites the generated docs + mani
 python scripts/generate_corpus.py --check   # verify docs/ matches the generator
 python -m rag.chunking export            # rewrites chunks.json
 ```
+
+## Limitations
+
+This is an MVP running on local models, not a hosted product.
+
+* The trace shows $0 for Ollama. That is the API bill. The wait is the machine under the model, and a $0 question can still take several seconds.
+* Most of that wait is the 12B model writing the answer. Search is the shorter step. The first ingest is also slow, because every chunk is embedded on that same machine.
+* The demo answers one question at a time. A slow answer holds the next one.
