@@ -2,6 +2,7 @@ import re
 
 from rag.config import GENERATE_MODEL
 from rag.logutil import log, stage
+from rag.promptio import load_prompt
 
 WORD = re.compile(r"[a-z0-9]+")
 STOP = {
@@ -46,12 +47,7 @@ STOP = {
 
 EMPTY = "No matching policy text."
 NOT_FOUND = "No policy passage answers this question."
-SYSTEM = """You answer questions about Doofenshmirtz Evil Inc policies.
-Use only the policy passages in the user message.
-If the passages do not contain the answer, say so.
-For a comparison, describe what changed between the current and previous text of each section.
-Write the answer in as few sentences as possible to cover understanding. Include the specific rule from the passages so the answer can stand on its own. Do not include policy names, versions, headings, or citations.
-Do not use outside knowledge."""
+SYSTEM = load_prompt("answer_system.txt")
 
 
 def generation_model() -> str:
@@ -145,6 +141,3 @@ def generate(question: str, kind: str, hits: list, model) -> str:
         hit["cited"] = id(hit) in used_ids
     log("generate", f"kind={kind} hits={len(hits)} cited={len(used)}")
     return f"{answer}\n\n{citations(kind, used)}"
-
-
-# TODO: Add LLM as judge before entering enterprise

@@ -9,6 +9,7 @@ import json
 import re
 
 from rag.logutil import log
+from rag.promptio import load_prompt
 
 CLAUSE_TYPES = ("prohibition", "obligation", "permission", "informational")
 PROHIBITION = re.compile(
@@ -75,13 +76,7 @@ class HeuristicExtractor:
         return {"clause_type": clause_type(text), "entities": entities(text)}
 
 
-LLM_PROMPT = """Extract metadata from this company policy passage. Reply with one \
-JSON object only: {{"entities": [short lowercase names], "clause_type": \
-"obligation"|"permission"|"prohibition"|"informational"}}
-
-Passage:
-{text}
-"""
+LLM_PROMPT = load_prompt("extract.txt")
 
 
 class LLMExtractor:

@@ -3,25 +3,9 @@ import re
 
 from rag.config import ROUTE_MODEL
 from rag.logutil import log
+from rag.promptio import load_prompt
 
-PROMPT = """Reply with one JSON object only: {{"kind":"lookup"|"compare","policy":"","version":"","policies":[]}}
-Use compare only when the question asks what changed, what's new, a diff, or how one version of a policy differs from another.
-A question that names an old version without asking for a change is lookup.
-policy must be one catalog name, or empty. policies lists every catalog name the question needs when it asks about more than one policy; otherwise leave it empty. version is the named version for a single-policy lookup, or empty. Leave version empty unless the question itself names one.
-
-Catalog:
-{catalog}
-
-Examples:
-what changed in HR Policy -> {{"kind":"compare","policy":"HR Policy","version":""}}
-what's new in preparedness -> {{"kind":"compare","policy":"Preparedness Policy","version":""}}
-diff the time policy -> {{"kind":"compare","policy":"Time & Usage Policy","version":""}}
-how did v2 differ for HR Policy -> {{"kind":"compare","policy":"HR Policy","version":""}}
-what did HR Policy 1.0 say about leave -> {{"kind":"lookup","policy":"HR Policy","version":"1.0"}}
-
-Question:
-{question}
-"""
+PROMPT = load_prompt("route.txt")
 
 
 def routing_model() -> str:

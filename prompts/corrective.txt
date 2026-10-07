@@ -1,0 +1,3 @@
+The search for this question found nothing relevant in the Doofenshmirtz Evil Inc policy handbook. Rewrite it as one short search query using words a policy document would use. Reply with the query only.
+
+Question: {question}

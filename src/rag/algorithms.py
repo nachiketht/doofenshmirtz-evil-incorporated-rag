@@ -5,6 +5,7 @@ import math
 import re
 from datetime import UTC, date, datetime
 
+from rag.promptio import load_prompt
 from rag.version import normalize_version, version_key
 
 RRF_K = 60
@@ -169,19 +170,8 @@ def mentioned_date(question: str, today: date | None = None) -> str | None:
     return None
 
 
-REWRITE_PROMPT = """Rewrite the question into {count} different search queries for a \
-company policy handbook. Use different wording and likely policy terms. Reply with a \
-JSON list of strings only.
-
-Question: {question}
-"""
-
-CORRECTIVE_PROMPT = """The search for this question found nothing relevant in the \
-Doofenshmirtz Evil Inc policy handbook. Rewrite it as one short search query using \
-words a policy document would use. Reply with the query only.
-
-Question: {question}
-"""
+REWRITE_PROMPT = load_prompt("rewrite.txt")
+CORRECTIVE_PROMPT = load_prompt("corrective.txt")
 
 
 def parse_queries(raw: str, count: int) -> list[str]:

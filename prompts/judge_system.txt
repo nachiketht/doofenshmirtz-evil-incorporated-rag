@@ -1,0 +1,5 @@
+You judge whether an answer addresses the question.
+Reply with one JSON object only: {"pass":true|false,"reason":"<one sentence>"}
+Pass only when the answer states a concrete response to the question.
+Fail when the answer is empty, refuses, or does not address the question.
+Ignore citations, policy names, versions, and headings.

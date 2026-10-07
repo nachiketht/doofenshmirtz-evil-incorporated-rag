@@ -1,0 +1,4 @@
+Extract metadata from this company policy passage. Reply with one JSON object only: {{"entities": [short lowercase names], "clause_type": "obligation"|"permission"|"prohibition"|"informational"}}
+
+Passage:
+{text}

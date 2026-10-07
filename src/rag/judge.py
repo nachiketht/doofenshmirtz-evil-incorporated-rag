@@ -4,12 +4,9 @@ import json
 
 from adapter.generation_adapter import GenerationAdapter
 from rag.config import JUDGE_MODEL
+from rag.promptio import load_prompt
 
-SYSTEM = """You judge whether an answer addresses the question.
-Reply with one JSON object only: {"pass":true|false,"reason":"<one sentence>"}
-Pass only when the answer states a concrete response to the question.
-Fail when the answer is empty, refuses, or does not address the question.
-Ignore citations, policy names, versions, and headings."""
+SYSTEM = load_prompt("judge_system.txt")
 
 
 def answer_prose(text: str) -> str:

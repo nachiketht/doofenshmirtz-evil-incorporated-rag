@@ -1,49 +1,46 @@
-"""Deprecated alias for the ``adapter`` package.
+"""Deprecated alias for the ``adapter`` package (the old misspelling)."""
 
-The package was originally published with a typo (``adpater``). Existing imports
-such as ``from adpater.database_adapter import DatabaseAdapter`` keep working:
-each submodule name is registered as an alias of the real ``adapter`` module,
-so monkeypatching either name patches the same object.
-"""
-
+import importlib
+import importlib.abc
+import importlib.util
 import sys
 import warnings
 
 import adapter
-from adapter import (
-    DatabaseAdapter,
-    EmbeddingAdapter,
-    GenerationAdapter,
-    PineconeDatabaseAdapter,
-    RerankerAdapter,
-)
-from adapter import database_adapter as _database_adapter
-from adapter import embedding_adapter as _embedding_adapter
-from adapter import generation_adapter as _generation_adapter
-from adapter import pinecone_adapter as _pinecone_adapter
-from adapter import rerank_adapter as _rerank_adapter
 
 warnings.warn(
-    "the 'adpater' package is deprecated; import from 'adapter' instead",
+    "'adpater' is a deprecated alias for 'adapter'",
     DeprecationWarning,
     stacklevel=2,
 )
 
-for _name, _module in {
-    "database_adapter": _database_adapter,
-    "embedding_adapter": _embedding_adapter,
-    "generation_adapter": _generation_adapter,
-    "pinecone_adapter": _pinecone_adapter,
-    "rerank_adapter": _rerank_adapter,
-}.items():
-    sys.modules[f"{__name__}.{_name}"] = _module
-    setattr(sys.modules[__name__], _name, _module)
 
-__all__ = [
-    "DatabaseAdapter",
-    "EmbeddingAdapter",
-    "GenerationAdapter",
-    "PineconeDatabaseAdapter",
-    "RerankerAdapter",
-    "adapter",
-]
+class _AliasLoader(importlib.abc.Loader):
+    def __init__(self, real_name: str) -> None:
+        self._real_name = real_name
+
+    def create_module(self, spec):
+        return importlib.import_module(self._real_name)
+
+    def exec_module(self, module) -> None:
+        return None
+
+
+class _AliasFinder(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        prefix = "adpater"
+        if fullname != prefix and not fullname.startswith(f"{prefix}."):
+            return None
+        real_name = "adapter" + fullname[len(prefix) :]
+        real_spec = importlib.util.find_spec(real_name)
+        if real_spec is None:
+            return None
+        return importlib.util.spec_from_loader(
+            fullname,
+            _AliasLoader(real_name),
+            is_package=real_spec.submodule_search_locations is not None,
+        )
+
+
+sys.meta_path.insert(0, _AliasFinder())
+sys.modules[__name__] = adapter
