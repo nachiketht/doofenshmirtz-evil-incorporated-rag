@@ -90,6 +90,22 @@ def test_answer_and_citation_checks():
     assert answer_ok("Issued 500,000 tokens.", ["500,000"], ["two million"])
     assert not answer_ok("Issued tokens.", ["500,000"], [])
     assert not answer_ok("500,000 tokens over six hours.", ["500,000"], ["six hours"])
+    assert not answer_ok("A recorded monologue may run 15 minutes.", ["5 minutes"], [])
+    assert answer_ok("A live monologue is limited to 5 minutes.", ["5 minutes"], [])
+    assert answer_ok(
+        "The winner receives a flat 10,000-token bonus.", ["10,000 tokens"], []
+    )
+    assert answer_ok(
+        "Food left over a weekend is abandoned, and then thrown out.", ["abandoned"], []
+    )
+    assert answer_ok(
+        "Climb into the industrial refrigerator, propping the door.",
+        ["refrigerator"],
+        [],
+    )
+    assert answer_ok("Suits, ties, and blazers are prohibited.", ["suits", "ties"], [])
+    assert answer_ok("The limit is 1,000 tokens.", ["1,000"], [])
+    assert not answer_ok("The limit is 1,000,000 tokens.", ["1,000"], [])
     answer = "60 minutes.\n\nTime & Usage Policy 3.0, 3. Video Game Time"
     assert citation_ok(answer, ["Time and Usage Policy|3.0|3. Video Game Time"])
     assert not citation_ok(answer, ["Time and Usage Policy|2.0|3. Video Game Time"])
@@ -124,7 +140,7 @@ def test_offline_eval_meets_the_ci_floor(offline_report):
     assert totals["groups"]["restricted"]["accuracy"] == 1.0
     assert totals["p95_latency_s"] >= totals["p50_latency_s"] > 0
     report = format_report(offline_report)
-    assert "recall@3=" in report and "leaks=0" in report and "[leak-check]" in report
+    assert "recall@5=" in report and "leaks=0" in report and "[leak-check]" in report
     assert OFFLINE_PHRASE not in json.dumps(offline_report)
 
 

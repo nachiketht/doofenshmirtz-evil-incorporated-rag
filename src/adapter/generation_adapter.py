@@ -18,10 +18,21 @@ class GenerationAdapter:
         self.client = client or ollama.Client(host=host or OLLAMA_HOST)
         self.last_usage: dict = {}
 
-    def generate(self, prompt: str, system: str | None = None) -> str:
+    def generate(
+        self,
+        prompt: str,
+        system: str | None = None,
+        *,
+        options: dict | None = None,
+        response_format: str | None = None,
+    ) -> str:
         kwargs = {"model": self.model, "prompt": prompt, "stream": False}
         if system:
             kwargs["system"] = system
+        if options:
+            kwargs["options"] = options
+        if response_format:
+            kwargs["format"] = response_format
         response = self.client.generate(**kwargs)
         text = response["response"] if isinstance(response, dict) else response.response
         # Ollama reports exact token counts; fall back to an estimate otherwise.

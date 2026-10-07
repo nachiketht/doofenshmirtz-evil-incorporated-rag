@@ -12,8 +12,9 @@ class FakeModel:
         self.reply = reply
         self.prompts = []
 
-    def generate(self, prompt):
+    def generate(self, prompt, **kwargs):
         self.prompts.append(prompt)
+        self.kwargs = kwargs
         return self.reply
 
 
@@ -27,6 +28,9 @@ def test_route_keeps_a_compare_paraphrase():
     assert decision == {"kind": "compare", "policy": "HR Policy", "version": ""}
     assert "what changed in HR Policy" in model.prompts[0]
     assert "HR Policy: 1.0, 2.0" in model.prompts[0]
+    assert "Pet Leave FAQ" not in model.prompts[0]
+    assert model.kwargs["options"] == {"temperature": 0}
+    assert model.kwargs["response_format"] == "json"
 
 
 def test_route_keeps_a_lookup_that_names_an_old_version():

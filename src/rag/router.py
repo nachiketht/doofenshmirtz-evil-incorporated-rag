@@ -7,7 +7,7 @@ from rag.logutil import log
 PROMPT = """Reply with one JSON object only: {{"kind":"lookup"|"compare","policy":"","version":"","policies":[]}}
 Use compare only when the question asks what changed, what's new, a diff, or how one version of a policy differs from another.
 A question that names an old version without asking for a change is lookup.
-policy must be one catalog name, or empty. policies lists every catalog name the question needs when it asks about more than one policy; otherwise leave it empty. version is the named version for a single-policy lookup, or empty.
+policy must be one catalog name, or empty. policies lists every catalog name the question needs when it asks about more than one policy; otherwise leave it empty. version is the named version for a single-policy lookup, or empty. Leave version empty unless the question itself names one.
 
 Catalog:
 {catalog}
@@ -33,7 +33,11 @@ def route(question: str, model, policies: dict) -> dict:
         f"{name}: {', '.join(versions)}" for name, versions in sorted(policies.items())
     )
     decision = parse_route(
-        model.generate(PROMPT.format(catalog=catalog, question=question)),
+        model.generate(
+            PROMPT.format(catalog=catalog, question=question),
+            options={"temperature": 0},
+            response_format="json",
+        ),
         policies,
     )
     log(

@@ -20,6 +20,7 @@ from rag.algorithms import (
     REWRITE_PROMPT,
     compare_targets,
     mentioned_date,
+    mentioned_versions,
     mmr,
     parse_queries,
     rrf,
@@ -37,7 +38,7 @@ from rag.version import version_key
 
 RRF = 60
 FUSE_N = 20
-TOP_N = 3
+TOP_N = 5
 CANDIDATE_K = 50
 ALIASES = {
     "Time and Usage Policy": "Time & Usage Policy",
@@ -139,23 +140,69 @@ def lookup_pairs(policies: dict, policy: str, version: str) -> list[tuple]:
     return [(name, versions[-1]) for name, versions in policies.items()]
 
 
-def decision_pairs(policies: dict, decision: dict) -> list[tuple]:
-    """Latest (or named) versions for the policies the router selected.
+def is_faq(hit: dict) -> bool:
+    return str(hit.get("doc_type") or "").lower() == "faq"
 
-    An empty policy with a ``policies`` list limits the search to those
-    documents. No names at all searches every latest version.
+
+def policies_named_in(text: str, names) -> list[str]:
+    """Catalog policies mentioned in ``text``, longest name first.
+
+    FAQ titles are skipped so "Pet Leave FAQ" does not count as its own parent.
     """
-    if not policies:
-        return []
-    if decision.get("policy"):
-        return lookup_pairs(policies, decision["policy"], decision.get("version") or "")
-    named = [name for name in decision.get("policies") or [] if name in policies]
-    if named:
-        pairs = []
-        for name in named:
-            pairs.extend(lookup_pairs(policies, name, ""))
-        return pairs
-    return lookup_pairs(policies, "", "")
+    folded = text.lower()
+    found = []
+    for name in sorted(names, key=len, reverse=True):
+        if name.lower().endswith(" faq"):
+            continue
+        if name.lower() in folded and name not in found:
+            found.append(name)
+    return found
+
+
+def faq_parent_policies(hits: list[dict], policies: dict) -> list[str]:
+    """Parent handbooks named by the FAQ hits, in first-seen order."""
+    parents = []
+    for hit in hits:
+        if not is_faq(hit):
+            continue
+        blob = " ".join(
+            str(hit.get(key) or "")
+            for key in ("text", "parent_text", "embed_text", "heading_path")
+        )
+        for name in policies_named_in(blob, policies):
+            if name not in parents:
+                parents.append(name)
+    return parents
+
+
+def widen_for_faq(pairs, hits, active) -> list[tuple]:
+    """Add the FAQ's parent policy, or every latest document when it is unnamed."""
+    parents = faq_parent_policies(hits, active)
+    if not parents:
+        return lookup_pairs(active, "", "")
+    widened = list(pairs)
+    for name in parents:
+        if name not in active:
+            continue
+        for pair in lookup_pairs(active, name, ""):
+            if pair not in widened:
+                widened.append(pair)
+    return widened
+
+
+def scoped_pairs(
+    question: str, active: dict, decision: dict
+) -> tuple[list[tuple], bool]:
+    """Latest version of every document, unless the question names a version.
+
+    The named version is taken from the question and searched on the policy
+    the router selected. A version the router invents is ignored.
+    """
+    policy = decision.get("policy") or ""
+    named = mentioned_versions(question, active.get(policy, ()))
+    if policy and named:
+        return [(policy, named[0])], True
+    return lookup_pairs(active, "", ""), False
 
 
 def cosine(left: list[float], right: list[float]) -> float:
@@ -616,6 +663,7 @@ def lookup(
     options,
 ):
     as_of = options.as_of or mentioned_date(question)
+    pinned = False
     if as_of and not decision["version"]:
         forced = lifecycle.in_force(entries, as_of)
         selected = decision.get("policies") or []
@@ -627,7 +675,7 @@ def lookup(
         where = base_filter(level, options, active_only=False)
         log("retrieve", f"as_of={as_of} documents={len(pairs)}")
     else:
-        pairs = decision_pairs(active, decision)
+        pairs, pinned = scoped_pairs(question, active, decision)
         where = base_filter(level, options, active_only=True)
     if not pairs:
         log("retrieve", "candidates=0")
@@ -650,11 +698,28 @@ def lookup(
         return hits, meta
     signal = relevance(hits, vector)
     meta["relevance"] = signal
+    # An FAQ can outscore the handbook it summarizes. High FAQ scores skip the
+    # low-relevance broaden below, so open the parent policy before that check.
+    if not pinned and any(is_faq(hit) for hit in hits):
+        widened = widen_for_faq(pairs, hits, active)
+        if len(widened) > len(pairs):
+            with stage("self_correct"):
+                parents = faq_parent_policies(hits, active)
+                log(
+                    "self_correct",
+                    "broaden=faq"
+                    + (f" parents={','.join(parents)}" if parents else " parents=all"),
+                )
+                hits = run(widened, queries, vectors, question)
+                pairs = widened
+                signal = relevance(hits, vector)
+                meta.update(relevance=signal, broadened=True)
     # A named-policy guess that doesn't actually answer the question (e.g.
     # "Agent P" -> Sighting Reports, while colour lives in another document)
     # is widened to every latest document before we rewrite the query.
     if (
-        is_low(signal, options)
+        not pinned
+        and is_low(signal, options)
         and decision.get("policy")
         and not decision.get("version")
     ):

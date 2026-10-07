@@ -1,8 +1,11 @@
 """Retrieval and answer metrics for the eval harness (pure functions)."""
 
 import math
+import re
 
 from rag.retrieve import canonicalize
+
+_PHRASE_WORD = re.compile(r"[a-z0-9,]+")
 
 
 def expected_keys(kind: str, chunk_ids: list[str]) -> list[str]:
@@ -58,10 +61,42 @@ def ndcg_at_k(expected: list[str], ranked: list[str], k: int) -> float:
     return actual / ideal if ideal else 0.0
 
 
+def _phrase_pattern(phrase: str) -> re.Pattern:
+    """Match a phrase on word boundaries, with hyphen/plural flexibility.
+
+    ``5 minutes`` does not match inside ``15 minutes``. ``10,000 tokens``
+    matches ``10,000-token``.
+    """
+    parts = _PHRASE_WORD.findall(phrase.lower())
+    if not parts:
+        body = re.escape(phrase.lower())
+    else:
+        pieces = []
+        for index, part in enumerate(parts):
+            token = re.escape(part)
+            if (
+                index == len(parts) - 1
+                and part.isalpha()
+                and part.endswith("s")
+                and len(part) > 3
+            ):
+                token = re.escape(part[:-1]) + r"s?"
+            pieces.append(token)
+        body = r"[\s-]+".join(pieces)
+    # A comma after a word ("abandoned,") is punctuation. A comma between
+    # digits is part of the number, so "1,000" does not match inside "1,000,000".
+    return re.compile(rf"(?<![a-z0-9])(?<!\d,){body}(?![a-z0-9])(?!,\d)")
+
+
+def contains_phrase(text: str, phrase: str) -> bool:
+    return _phrase_pattern(phrase).search(text.lower()) is not None
+
+
 def answer_ok(text: str, must_contain, must_not_contain) -> bool:
-    folded = text.lower()
-    has_required = all(phrase.lower() in folded for phrase in must_contain)
-    avoids_banned = all(phrase.lower() not in folded for phrase in must_not_contain)
+    has_required = all(contains_phrase(text, phrase) for phrase in must_contain)
+    avoids_banned = all(
+        not contains_phrase(text, phrase) for phrase in must_not_contain
+    )
     return has_required and avoids_banned
 
 

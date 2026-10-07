@@ -2,8 +2,9 @@
 
 Metrics per case: recall@k, reciprocal rank, nDCG@k, answer phrase check,
 citation check, top-secret leakage, latency and cost. Totals add MRR, p50/p95
-latency and per-group breakdowns. Restricted cases are prefixed with the access
-phrase at run time; the phrase never appears in the output.
+latency and per-group breakdowns. Pass ``judge`` to also score the generated
+prose with an LLM. Restricted cases are prefixed with the access phrase at run
+time; the phrase never appears in the output.
 """
 
 import time
@@ -36,7 +37,7 @@ def secret_hit(hits: list[dict]) -> bool:
     return False
 
 
-def run_case(case, components, options, phrase, k):
+def run_case(case, components, options, phrase, k, judge=None):
     restricted = case.get("access") == "restricted"
     question = f"{phrase}: {case['question']}" if restricted else case["question"]
     started = time.perf_counter()
@@ -44,7 +45,9 @@ def run_case(case, components, options, phrase, k):
     latency = time.perf_counter() - started
     kind = result["kind"]
     expected = expected_keys(case.get("kind", "lookup"), case["chunks"])
-    ranked = ranked_keys(kind, result["hits"])
+    # Score the reranked retrieval list. ``hits`` has siblings inserted and
+    # has been reordered for the generator, which pushes true matches past k.
+    ranked = ranked_keys(kind, result.get("retrieved", result["hits"]))
     text = result["answer"]
     leaked = case.get("leak_check", False) and (
         secret_hit(result["hits"]) or not answer_ok(text, [], case["must_not_contain"])
@@ -74,6 +77,10 @@ def run_case(case, components, options, phrase, k):
         kind_ok=kind == case.get("kind", "lookup"),
         missing_chunks=[key for key in expected if key not in ranked[:k]],
     )
+    if judge is not None:
+        verdict = judge(case["question"], text)
+        row["judge_ok"] = bool(verdict["pass"])
+        row["judge_reason"] = str(verdict.get("reason") or "")
     return row
 
 
@@ -94,6 +101,9 @@ def summarize(rows: list[dict], k: int) -> dict:
         "p95_latency_s": round(percentile(latencies, 95), 4),
         "cost_usd": round(sum(row["cost_usd"] for row in rows), 6),
     }
+    judged = [row for row in scored if "judge_ok" in row]
+    if judged:
+        totals["judge"] = round(mean(row["judge_ok"] for row in judged), 4)
     groups = {}
     for row in scored:
         groups.setdefault(row["group"], []).append(row)
@@ -108,45 +118,70 @@ def summarize(rows: list[dict], k: int) -> dict:
     return totals
 
 
-def evaluate(cases, components, options=None, phrase="", k=None) -> dict:
+def evaluate(
+    cases, components, options=None, phrase="", k=None, judge=None, on_row=None
+) -> dict:
     options = options or RetrievalOptions()
     k = k or options.top_n
     runnable = [c for c in cases if c.get("access") != "restricted" or phrase]
     skipped = len(cases) - len(runnable)
-    rows = [run_case(case, components, options, phrase, k) for case in runnable]
+    rows = []
+    for case in runnable:
+        row = run_case(case, components, options, phrase, k, judge)
+        rows.append(row)
+        if on_row is not None:
+            on_row(row)
     totals = summarize(rows, k)
     totals["skipped_restricted"] = skipped
     return {"totals": totals, "rows": rows}
 
 
-def format_report(report: dict) -> str:
-    totals = report["totals"]
-    header = (
-        f"{'recall':>7} {'rr':>5} {'ndcg':>5} {'ans':>4} {'cite':>4} "
-        f"{'latency':>9}  question"
+def format_header(judged: bool) -> str:
+    return (
+        f"{'recall':>7} {'rr':>5} {'ndcg':>5} {'ans':>4} {'cite':>4}"
+        + (f" {'jdg':>4}" if judged else "")
+        + f" {'latency':>9}  question"
     )
-    lines = ["", header]
-    for row in report["rows"]:
-        if not row["scored"]:
-            mark = "LEAK" if row["leaked"] else "safe"
-            lines.append(
-                f"{'':>7} {'':>5} {'':>5} {mark:>4} {'':>4} "
-                f"{row['latency']:8.3f}s  [leak-check] {row['question']}"
-            )
-            continue
-        lines.append(
-            f"{row['recall']:7.3f} {row['rr']:5.2f} {row['ndcg']:5.2f} "
-            f"{'yes' if row['answer_ok'] else 'no':>4} "
-            f"{'yes' if row['citation_ok'] else 'no':>4} {row['latency']:8.3f}s  "
-            f"{row['question']}"
+
+
+def format_row(row: dict, judged: bool) -> str:
+    judge_cell = ""
+    if judged and row["scored"]:
+        judge_cell = f" {'yes' if row.get('judge_ok') else 'no':>4}"
+    if not row["scored"]:
+        mark = "LEAK" if row["leaked"] else "safe"
+        return (
+            f"{'':>7} {'':>5} {'':>5} {mark:>4} {'':>4}{judge_cell} "
+            f"{row['latency']:8.3f}s  [leak-check] {row['question']}"
         )
-    lines.append(
+    return (
+        f"{row['recall']:7.3f} {row['rr']:5.2f} {row['ndcg']:5.2f} "
+        f"{'yes' if row['answer_ok'] else 'no':>4} "
+        f"{'yes' if row['citation_ok'] else 'no':>4}{judge_cell} "
+        f"{row['latency']:8.3f}s  {row['question']}"
+    )
+
+
+def format_summary(totals: dict) -> str:
+    judged = "judge" in totals
+    summary = (
         f"recall@{totals['k']}={totals['recall']:.3f} mrr={totals['mrr']:.3f} "
         f"ndcg@{totals['k']}={totals['ndcg']:.3f} accuracy={totals['accuracy']:.3f} "
         f"citation={totals['citation']:.3f} routing={totals['routing']:.3f} "
         f"leaks={totals['leaks']} p50={totals['p50_latency_s']:.3f}s "
         f"p95={totals['p95_latency_s']:.3f}s cost=${totals['cost_usd']:.4f}"
     )
+    if judged:
+        summary += f" judge={totals['judge']:.3f}"
+    return summary
+
+
+def format_report(report: dict) -> str:
+    totals = report["totals"]
+    judged = "judge" in totals
+    lines = ["", format_header(judged)]
+    lines.extend(format_row(row, judged) for row in report["rows"])
+    lines.append(format_summary(totals))
     if totals.get("skipped_restricted"):
         lines.append(
             f"skipped {totals['skipped_restricted']} restricted cases "

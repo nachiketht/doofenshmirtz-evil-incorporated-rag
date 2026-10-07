@@ -15,6 +15,7 @@ from rag.pipeline import (
     build_components,
     cache_file,
     corpus_key,
+    include_section_children,
     print_trace,
     with_context,
 )
@@ -150,7 +151,7 @@ def test_multi_query_rewrites_are_fused():
 
 def test_multi_query_survives_a_failed_rewrite():
     class Failing(ScriptedModel):
-        def generate(self, prompt, system=None):
+        def generate(self, prompt, system=None, **_kwargs):
             if "different search queries" in prompt:
                 raise TimeoutError
             return super().generate(prompt, system)
@@ -240,7 +241,73 @@ def test_self_correction_rewrites_once_then_gives_up():
     assert lost["hits"] == []
 
 
-def test_wrong_policy_guess_broadens_to_the_rest_of_the_catalog():
+def test_lookup_reaches_the_handbook_when_the_router_names_only_the_faq():
+    embedder = HashEmbedder()
+    rows = [
+        record(
+            "Pet Leave FAQ",
+            "1.0",
+            "2. Leave Length > 2.1 Platypus Leave",
+            "Under HR Policy 3.0 a platypus gets 10 days.",
+            doc_type="faq",
+        ),
+        record(
+            "HR Policy",
+            "3.0",
+            "5. Pet Adoption Leave > 5.1 Leave Entitlement",
+            "Employees who adopt a dog receive 7 days of paid leave.",
+        ),
+        record(
+            "Lab Policy",
+            "1.0",
+            "1. Purpose",
+            "Goggles are required in the laboratory.",
+        ),
+    ]
+    database = store(rows, embedder)
+    found = retrieve(
+        "How many days for adopting a platypus?",
+        embedder,
+        ScriptedModel(route='{"kind":"lookup","policy":"Pet Leave FAQ","version":""}'),
+        database,
+        IdentityReranker(),
+        options=RetrievalOptions(self_correct=True, min_cosine=0.0),
+        access=parse_access("x", ""),
+    )
+    assert any(hit["policy"] == "HR Policy" for hit in found["hits"])
+
+
+def test_lookup_reaches_the_handbook_when_the_faq_names_no_parent():
+    embedder = HashEmbedder()
+    rows = [
+        record(
+            "Expense FAQ",
+            "1.0",
+            "2. Claims > 2.1 Deadline",
+            "Submit a claim within 14 days.",
+            doc_type="faq",
+        ),
+        record(
+            "Expense Reimbursement Policy",
+            "3.0",
+            "4. Receipts and Deadlines > 4.1 Submission Deadline",
+            "Expense claims must be submitted within 14 days of purchase.",
+        ),
+    ]
+    database = store(rows, embedder)
+    found = retrieve(
+        "Within how many days must expense claims be submitted?",
+        embedder,
+        ScriptedModel(route='{"kind":"lookup","policy":"Expense FAQ","version":""}'),
+        database,
+        IdentityReranker(),
+        options=RetrievalOptions(self_correct=True, min_cosine=0.0),
+        access=parse_access("x", ""),
+    )
+    assert any(hit["policy"] == "Expense Reimbursement Policy" for hit in found["hits"])
+
+
+def test_lookup_reaches_the_answer_when_the_router_names_the_wrong_policy():
     embedder = HashEmbedder()
     rows = HR + [
         record(
@@ -273,7 +340,6 @@ def test_wrong_policy_guess_broadens_to_the_rest_of_the_catalog():
         ),
         access=parse_access("x", ""),
     )
-    assert found.get("broadened") is True
     assert any("teal" in hit["text"] for hit in found["hits"])
 
 
@@ -304,6 +370,8 @@ def test_pipeline_trace_cache_and_reorder(tmp_path, capsys):
     first = answer("vacation leave days", parts, options)
     assert first["cached"] is False
     assert first["kind"] == "lookup"
+    assert first["retrieved"]
+    assert first["retrieved"][0]["id"] == first["hits"][0]["id"]
     steps = [row["step"] for row in first["trace"]]
     for step in (
         "access",
@@ -344,6 +412,56 @@ def test_not_found_answer_is_not_cached():
     assert result["kind"] == "not_found"
     assert result["answer"] == "No policy passage answers this question."
     assert len(cache) == 0
+
+
+def test_section_children_join_the_matched_chunk():
+    parent = "Preparedness Policy|2.0|4. Nuclear"
+    rows = [
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "4. Nuclear > 4.3 Duration",
+            "two weeks indoors",
+            parent_id=parent,
+            section="4. Nuclear",
+            chunk_index=3,
+        ),
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "4. Nuclear > 4.1 Shelter",
+            "break room refrigerator",
+            parent_id=parent,
+            section="4. Nuclear",
+            chunk_index=1,
+        ),
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "4. Nuclear > 4.2 Hazmat",
+            "top 10 on the foosball leaderboard",
+            parent_id=parent,
+            section="4. Nuclear",
+            chunk_index=2,
+        ),
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "9. Kits",
+            "flashlight and snacks",
+            chunk_index=4,
+        ),
+    ]
+    database = store(rows, HashEmbedder())
+    duration = rows[0]
+    kits = rows[3]
+    expanded = include_section_children([duration, kits], database, "default")
+    assert [hit["id"] for hit in expanded] == [
+        "Preparedness Policy|2.0|4. Nuclear > 4.3 Duration",
+        "Preparedness Policy|2.0|4. Nuclear > 4.1 Shelter",
+        "Preparedness Policy|2.0|4. Nuclear > 4.2 Hazmat",
+        "Preparedness Policy|2.0|9. Kits",
+    ]
 
 
 def test_parent_text_becomes_generation_context():
@@ -488,4 +606,4 @@ def test_env_example_parses_and_has_no_real_phrase():
     settings = Settings.from_env(example)
     assert settings.backend == "chroma"
     assert settings.mrl_dims == 0
-    assert RetrievalOptions.from_env(example).top_n == 3
+    assert RetrievalOptions.from_env(example).top_n == 5
