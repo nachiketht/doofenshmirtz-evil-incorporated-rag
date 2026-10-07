@@ -155,9 +155,14 @@ answers are kept in memory only (never written to `.rag/`).
 
 ```bash
 python -m rag.ingest [docs] [chroma] [--force] [--chunker contextual]
-python -m rag.admin list | retire POLICY VERSION | restore POLICY VERSION | purge POLICY VERSION --yes
+python -m rag.admin list
+python -m rag.admin retire "HR Policy" [VERSION]
+python -m rag.admin restore "HR Policy" [VERSION]
+python -m rag.admin purge "HR Policy" VERSION --yes
 python -m rag.chunking stats --strategy table_aware
 ```
+
+`retire` and `restore` apply to every version of the policy when `VERSION` is omitted. `purge` requires both a version and `--yes`. Any of the four accepts `--db PATH` to use a Chroma directory instead of the store in `.env`.
 
 * Files must be named `Doofenshmirtz Evil Inc - <Title> v<N.N>.<pdf|docx|md>`.
   `docs/manifest.json` adds department, document type, classification and
