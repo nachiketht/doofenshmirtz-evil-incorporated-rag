@@ -29,7 +29,11 @@ ollama pull gemma3:12b
 ```
 
 The clients use `OLLAMA_HOST` (default `http://127.0.0.1:11434`). From a
-container, Ollama usually lives at `http://host.docker.internal:11434`.
+container, point it at Ollama on the host:
+
+```bash
+export OLLAMA_HOST=http://host.docker.internal:11434
+```
 
 Everything is configured through environment variables or the gitignored
 `.env`; `.env.example` lists every setting with its default.
