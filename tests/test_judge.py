@@ -1,4 +1,4 @@
-from rag.evaluate import format_report, run_case, summarize
+from rag.evaluate import evaluate, format_report, run_case, summarize
 from rag.judge import SYSTEM, answer_prose, judge_answer, parse_verdict
 from rag.retrieve import RetrievalOptions
 
@@ -95,3 +95,28 @@ def test_run_case_records_the_judge(monkeypatch):
     totals = summarize([row], 3)
     assert totals["judge"] == 1.0
     assert "judge=1.000" in format_report({"totals": totals, "rows": [row]})
+
+
+def test_evaluate_emits_each_row_as_it_finishes(monkeypatch):
+    def fake_answer(question, components, options):
+        return {
+            "kind": "lookup",
+            "hits": [{"id": "HR Policy|3.0|1. Purpose"}],
+            "answer": "Employees get 7 days.\n\nHR Policy 3.0, 1. Purpose",
+            "access": "default",
+            "cached": False,
+            "trace": [{"cost_usd": 0.0}],
+        }
+
+    monkeypatch.setattr("rag.evaluate.answer", fake_answer)
+    seen = []
+    case = {
+        "question": "How many days?",
+        "chunks": ["HR Policy|3.0|1. Purpose"],
+        "must_contain": ["7 days"],
+        "must_not_contain": [],
+        "group": "original",
+    }
+    report = evaluate([case], None, RetrievalOptions(), "", on_row=seen.append)
+    assert [row["question"] for row in seen] == ["How many days?"]
+    assert report["rows"] == seen

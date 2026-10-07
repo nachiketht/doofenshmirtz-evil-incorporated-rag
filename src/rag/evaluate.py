@@ -116,45 +116,52 @@ def summarize(rows: list[dict], k: int) -> dict:
     return totals
 
 
-def evaluate(cases, components, options=None, phrase="", k=None, judge=None) -> dict:
+def evaluate(
+    cases, components, options=None, phrase="", k=None, judge=None, on_row=None
+) -> dict:
     options = options or RetrievalOptions()
     k = k or options.top_n
     runnable = [c for c in cases if c.get("access") != "restricted" or phrase]
     skipped = len(cases) - len(runnable)
-    rows = [
-        run_case(case, components, options, phrase, k, judge) for case in runnable
-    ]
+    rows = []
+    for case in runnable:
+        row = run_case(case, components, options, phrase, k, judge)
+        rows.append(row)
+        if on_row is not None:
+            on_row(row)
     totals = summarize(rows, k)
     totals["skipped_restricted"] = skipped
     return {"totals": totals, "rows": rows}
 
 
-def format_report(report: dict) -> str:
-    totals = report["totals"]
-    judged = "judge" in totals
-    header = (
+def format_header(judged: bool) -> str:
+    return (
         f"{'recall':>7} {'rr':>5} {'ndcg':>5} {'ans':>4} {'cite':>4}"
         + (f" {'jdg':>4}" if judged else "")
         + f" {'latency':>9}  question"
     )
-    lines = ["", header]
-    for row in report["rows"]:
-        judge_cell = ""
-        if judged and row["scored"]:
-            judge_cell = f" {'yes' if row.get('judge_ok') else 'no':>4}"
-        if not row["scored"]:
-            mark = "LEAK" if row["leaked"] else "safe"
-            lines.append(
-                f"{'':>7} {'':>5} {'':>5} {mark:>4} {'':>4}{judge_cell} "
-                f"{row['latency']:8.3f}s  [leak-check] {row['question']}"
-            )
-            continue
-        lines.append(
-            f"{row['recall']:7.3f} {row['rr']:5.2f} {row['ndcg']:5.2f} "
-            f"{'yes' if row['answer_ok'] else 'no':>4} "
-            f"{'yes' if row['citation_ok'] else 'no':>4}{judge_cell} "
-            f"{row['latency']:8.3f}s  {row['question']}"
+
+
+def format_row(row: dict, judged: bool) -> str:
+    judge_cell = ""
+    if judged and row["scored"]:
+        judge_cell = f" {'yes' if row.get('judge_ok') else 'no':>4}"
+    if not row["scored"]:
+        mark = "LEAK" if row["leaked"] else "safe"
+        return (
+            f"{'':>7} {'':>5} {'':>5} {mark:>4} {'':>4}{judge_cell} "
+            f"{row['latency']:8.3f}s  [leak-check] {row['question']}"
         )
+    return (
+        f"{row['recall']:7.3f} {row['rr']:5.2f} {row['ndcg']:5.2f} "
+        f"{'yes' if row['answer_ok'] else 'no':>4} "
+        f"{'yes' if row['citation_ok'] else 'no':>4}{judge_cell} "
+        f"{row['latency']:8.3f}s  {row['question']}"
+    )
+
+
+def format_summary(totals: dict) -> str:
+    judged = "judge" in totals
     summary = (
         f"recall@{totals['k']}={totals['recall']:.3f} mrr={totals['mrr']:.3f} "
         f"ndcg@{totals['k']}={totals['ndcg']:.3f} accuracy={totals['accuracy']:.3f} "
@@ -164,7 +171,15 @@ def format_report(report: dict) -> str:
     )
     if judged:
         summary += f" judge={totals['judge']:.3f}"
-    lines.append(summary)
+    return summary
+
+
+def format_report(report: dict) -> str:
+    totals = report["totals"]
+    judged = "judge" in totals
+    lines = ["", format_header(judged)]
+    lines.extend(format_row(row, judged) for row in report["rows"])
+    lines.append(format_summary(totals))
     if totals.get("skipped_restricted"):
         lines.append(
             f"skipped {totals['skipped_restricted']} restricted cases "

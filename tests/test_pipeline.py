@@ -15,6 +15,7 @@ from rag.pipeline import (
     build_components,
     cache_file,
     corpus_key,
+    include_section_children,
     print_trace,
     with_context,
 )
@@ -344,6 +345,56 @@ def test_not_found_answer_is_not_cached():
     assert result["kind"] == "not_found"
     assert result["answer"] == "No policy passage answers this question."
     assert len(cache) == 0
+
+
+def test_section_children_join_the_matched_chunk():
+    parent = "Preparedness Policy|2.0|4. Nuclear"
+    rows = [
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "4. Nuclear > 4.3 Duration",
+            "two weeks indoors",
+            parent_id=parent,
+            section="4. Nuclear",
+            chunk_index=3,
+        ),
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "4. Nuclear > 4.1 Shelter",
+            "break room refrigerator",
+            parent_id=parent,
+            section="4. Nuclear",
+            chunk_index=1,
+        ),
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "4. Nuclear > 4.2 Hazmat",
+            "top 10 on the foosball leaderboard",
+            parent_id=parent,
+            section="4. Nuclear",
+            chunk_index=2,
+        ),
+        record(
+            "Preparedness Policy",
+            "2.0",
+            "9. Kits",
+            "flashlight and snacks",
+            chunk_index=4,
+        ),
+    ]
+    database = store(rows, HashEmbedder())
+    duration = rows[0]
+    kits = rows[3]
+    expanded = include_section_children([duration, kits], database, "default")
+    assert [hit["id"] for hit in expanded] == [
+        "Preparedness Policy|2.0|4. Nuclear > 4.3 Duration",
+        "Preparedness Policy|2.0|4. Nuclear > 4.1 Shelter",
+        "Preparedness Policy|2.0|4. Nuclear > 4.2 Hazmat",
+        "Preparedness Policy|2.0|9. Kits",
+    ]
 
 
 def test_parent_text_becomes_generation_context():

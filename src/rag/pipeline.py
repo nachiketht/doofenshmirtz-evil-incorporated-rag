@@ -1,8 +1,8 @@
 """End-to-end question answering with tracing and caching.
 
     access gate -> embed -> semantic cache -> retrieve (route, multi-query,
-    hybrid, rerank, MMR, self-correct) -> lost-in-the-middle reorder ->
-    generate -> cache store
+    hybrid, rerank, MMR, self-correct) -> section siblings ->
+    lost-in-the-middle reorder -> generate -> cache store
 
 Everything runs inside one ``Tracer`` so the result carries a per-step table of
 latency, tokens and cost. The access phrase is stripped by the gate and never
@@ -13,7 +13,14 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
-from rag.access import INTERNAL, RESTRICTED, TOP_SECRET, parse_access
+from rag.access import (
+    INTERNAL,
+    RESTRICTED,
+    TOP_SECRET,
+    access_filter,
+    parse_access,
+    visible,
+)
 from rag.algorithms import lost_in_the_middle
 from rag.cache import SemanticCache
 from rag.config import ROUTE_MODEL, Settings
@@ -101,6 +108,48 @@ def with_context(hits: list[dict]) -> list[dict]:
     return expanded
 
 
+def section_parent_id(hit: dict) -> str:
+    """Section id for a child chunk. Empty for a whole-document parent."""
+    parent = str(hit.get("parent_id") or "")
+    document = f"{hit.get('policy')}|{hit.get('version')}"
+    if not parent or parent == document:
+        return ""
+    return parent
+
+
+def include_section_children(hits: list[dict], database, level: str) -> list[dict]:
+    """Insert the other children of each retrieved section, after the match.
+
+    One nuclear subsection already in the list pulls in the rest of that
+    section, so the hazmat rule is present when shelter duration was the hit.
+    A document-level parent is not expanded; that would return the whole policy.
+    """
+    seen = {hit.get("id") for hit in hits}
+    expanded: list[dict] = []
+    loaded: set[str] = set()
+    for hit in hits:
+        expanded.append(hit)
+        parent = section_parent_id(hit)
+        if not parent or parent in loaded:
+            continue
+        loaded.add(parent)
+        where = {"parent_id": parent, "status": "active", **access_filter(level)}
+        rows = [
+            row
+            for row in database.get(where)
+            if visible(row, level) and row.get("text")
+        ]
+        rows.sort(
+            key=lambda row: (row.get("chunk_index") or 0, row.get("heading_path") or "")
+        )
+        for row in rows:
+            if row.get("id") in seen:
+                continue
+            seen.add(row["id"])
+            expanded.append(row)
+    return expanded
+
+
 def options_key(options: RetrievalOptions) -> str:
     return f"{options.as_of}|{sorted((options.filters or {}).items())}|{options.entity}"
 
@@ -141,6 +190,9 @@ def answer(question: str, components: Components, options=None, tracer=None) -> 
             entries=entries,
         )
         kind, hits = found["kind"], found["hits"]
+        if kind == "lookup":
+            with stage("siblings"):
+                hits = include_section_children(hits, components.database, access.level)
         if options.expand_parents and kind != "compare":
             hits = with_context(hits)
         if options.lost_in_middle and len(hits) > 2:
