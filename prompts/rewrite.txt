@@ -1,0 +1,3 @@
+Rewrite the question into {count} different search queries for a company policy handbook. Use different wording and likely policy terms. Reply with a JSON list of strings only.
+
+Question: {question}
