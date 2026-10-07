@@ -141,6 +141,3 @@ def generate(question: str, kind: str, hits: list, model) -> str:
         hit["cited"] = id(hit) in used_ids
     log("generate", f"kind={kind} hits={len(hits)} cited={len(used)}")
     return f"{answer}\n\n{citations(kind, used)}"
-
-
-# TODO: Add LLM as judge before entering enterprise
