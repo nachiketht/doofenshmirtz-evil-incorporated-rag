@@ -241,6 +241,75 @@ def test_self_correction_rewrites_once_then_gives_up():
     assert lost["hits"] == []
 
 
+def test_faq_hit_broadens_to_its_parent_policy_despite_a_high_score():
+    embedder = HashEmbedder()
+    rows = [
+        record(
+            "Pet Leave FAQ",
+            "1.0",
+            "2. Leave Length > 2.1 Platypus Leave",
+            "Under HR Policy 3.0 a platypus gets 10 days.",
+            doc_type="faq",
+        ),
+        record(
+            "HR Policy",
+            "3.0",
+            "5. Pet Adoption Leave > 5.1 Leave Entitlement",
+            "Employees who adopt a dog receive 7 days of paid leave.",
+        ),
+        record(
+            "Lab Policy",
+            "1.0",
+            "1. Purpose",
+            "Goggles are required in the laboratory.",
+        ),
+    ]
+    database = store(rows, embedder)
+    found = retrieve(
+        "How many days for adopting a platypus?",
+        embedder,
+        ScriptedModel(route='{"kind":"lookup","policy":"Pet Leave FAQ","version":""}'),
+        database,
+        IdentityReranker(),
+        options=RetrievalOptions(self_correct=True, min_cosine=0.0),
+        access=parse_access("x", ""),
+    )
+    assert found.get("broadened") is True
+    assert any(hit["policy"] == "HR Policy" for hit in found["hits"])
+    assert all(hit["policy"] != "Lab Policy" for hit in found["hits"])
+
+
+def test_unnamed_faq_broadens_to_every_latest_document():
+    embedder = HashEmbedder()
+    rows = [
+        record(
+            "Expense FAQ",
+            "1.0",
+            "2. Claims > 2.1 Deadline",
+            "Submit a claim within 14 days.",
+            doc_type="faq",
+        ),
+        record(
+            "Expense Reimbursement Policy",
+            "3.0",
+            "4. Receipts and Deadlines > 4.1 Submission Deadline",
+            "Expense claims must be submitted within 14 days of purchase.",
+        ),
+    ]
+    database = store(rows, embedder)
+    found = retrieve(
+        "Within how many days must expense claims be submitted?",
+        embedder,
+        ScriptedModel(route='{"kind":"lookup","policy":"Expense FAQ","version":""}'),
+        database,
+        IdentityReranker(),
+        options=RetrievalOptions(self_correct=True, min_cosine=0.0),
+        access=parse_access("x", ""),
+    )
+    assert found.get("broadened") is True
+    assert any(hit["policy"] == "Expense Reimbursement Policy" for hit in found["hits"])
+
+
 def test_wrong_policy_guess_broadens_to_the_rest_of_the_catalog():
     embedder = HashEmbedder()
     rows = HR + [
@@ -539,4 +608,4 @@ def test_env_example_parses_and_has_no_real_phrase():
     settings = Settings.from_env(example)
     assert settings.backend == "chroma"
     assert settings.mrl_dims == 0
-    assert RetrievalOptions.from_env(example).top_n == 3
+    assert RetrievalOptions.from_env(example).top_n == 5

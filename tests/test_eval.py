@@ -90,6 +90,11 @@ def test_answer_and_citation_checks():
     assert answer_ok("Issued 500,000 tokens.", ["500,000"], ["two million"])
     assert not answer_ok("Issued tokens.", ["500,000"], [])
     assert not answer_ok("500,000 tokens over six hours.", ["500,000"], ["six hours"])
+    assert not answer_ok("A recorded monologue may run 15 minutes.", ["5 minutes"], [])
+    assert answer_ok("A live monologue is limited to 5 minutes.", ["5 minutes"], [])
+    assert answer_ok(
+        "The winner receives a flat 10,000-token bonus.", ["10,000 tokens"], []
+    )
     answer = "60 minutes.\n\nTime & Usage Policy 3.0, 3. Video Game Time"
     assert citation_ok(answer, ["Time and Usage Policy|3.0|3. Video Game Time"])
     assert not citation_ok(answer, ["Time and Usage Policy|2.0|3. Video Game Time"])

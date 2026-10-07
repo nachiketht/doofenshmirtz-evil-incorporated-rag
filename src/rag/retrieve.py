@@ -139,6 +139,56 @@ def lookup_pairs(policies: dict, policy: str, version: str) -> list[tuple]:
     return [(name, versions[-1]) for name, versions in policies.items()]
 
 
+def is_faq(hit: dict) -> bool:
+    return str(hit.get("doc_type") or "").lower() == "faq"
+
+
+def policies_named_in(text: str, names) -> list[str]:
+    """Catalog policies mentioned in ``text``, longest name first.
+
+    FAQ titles are skipped so "Pet Leave FAQ" does not count as its own parent.
+    """
+    folded = text.lower()
+    found = []
+    for name in sorted(names, key=len, reverse=True):
+        if name.lower().endswith(" faq"):
+            continue
+        if name.lower() in folded and name not in found:
+            found.append(name)
+    return found
+
+
+def faq_parent_policies(hits: list[dict], policies: dict) -> list[str]:
+    """Parent handbooks named by the FAQ hits, in first-seen order."""
+    parents = []
+    for hit in hits:
+        if not is_faq(hit):
+            continue
+        blob = " ".join(
+            str(hit.get(key) or "")
+            for key in ("text", "parent_text", "embed_text", "heading_path")
+        )
+        for name in policies_named_in(blob, policies):
+            if name not in parents:
+                parents.append(name)
+    return parents
+
+
+def widen_for_faq(pairs, hits, active) -> list[tuple]:
+    """Add the FAQ's parent policy, or every latest document when it is unnamed."""
+    parents = faq_parent_policies(hits, active)
+    if not parents:
+        return lookup_pairs(active, "", "")
+    widened = list(pairs)
+    for name in parents:
+        if name not in active:
+            continue
+        for pair in lookup_pairs(active, name, ""):
+            if pair not in widened:
+                widened.append(pair)
+    return widened
+
+
 def decision_pairs(policies: dict, decision: dict) -> list[tuple]:
     """Latest (or named) versions for the policies the router selected.
 
@@ -650,6 +700,22 @@ def lookup(
         return hits, meta
     signal = relevance(hits, vector)
     meta["relevance"] = signal
+    # An FAQ can outscore the handbook it summarizes. High FAQ scores skip the
+    # low-relevance broaden below, so open the parent policy before that check.
+    if any(is_faq(hit) for hit in hits):
+        widened = widen_for_faq(pairs, hits, active)
+        if len(widened) > len(pairs):
+            with stage("self_correct"):
+                parents = faq_parent_policies(hits, active)
+                log(
+                    "self_correct",
+                    "broaden=faq"
+                    + (f" parents={','.join(parents)}" if parents else " parents=all"),
+                )
+                hits = run(widened, queries, vectors, question)
+                pairs = widened
+                signal = relevance(hits, vector)
+                meta.update(relevance=signal, broadened=True)
     # A named-policy guess that doesn't actually answer the question (e.g.
     # "Agent P" -> Sighting Reports, while colour lives in another document)
     # is widened to every latest document before we rewrite the query.

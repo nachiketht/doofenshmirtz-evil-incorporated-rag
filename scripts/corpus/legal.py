@@ -108,6 +108,24 @@ FAMILIES = [
                 "base": "2.0",
                 "purpose": "Version 3.0 introduces the pre-recorded monologue, so the CEO "
                 "can express himself fully without standing next to the nemesis.",
+                "replace": {
+                    "Monologue Length": (
+                        "Monologue Length",
+                        [
+                            (
+                                "Maximum Duration",
+                                "A live monologue is now limited to 5 minutes, down from "
+                                "10 minutes. A timer will be installed in every trap room.",
+                            ),
+                            (
+                                "Backstory Allowance",
+                                "The Gimmelshtump backstory allowance is reduced to 1 "
+                                "extra minute and must include at least one fact that is "
+                                "actually true.",
+                            ),
+                        ],
+                    )
+                },
                 "add": [
                     (
                         "Pre-Recorded Monologues",

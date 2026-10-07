@@ -17,7 +17,7 @@ This policy applies to anyone delivering a monologue on company time, especially
 
 ## 4. Monologue Length
 
-**4.1 Maximum Duration.** Monologues are now limited to 5 minutes, down from 10 minutes. A timer will be installed in every trap room.
+**4.1 Maximum Duration.** A live monologue is now limited to 5 minutes, down from 10 minutes. A timer will be installed in every trap room.
 
 **4.2 Backstory Allowance.** The Gimmelshtump backstory allowance is reduced to 1 extra minute and must include at least one fact that is actually true.
 
