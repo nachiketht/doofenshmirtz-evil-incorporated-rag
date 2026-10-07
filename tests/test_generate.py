@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from adpater.generation_adapter import GenerationAdapter
+from adapter.generation_adapter import GenerationAdapter
 from rag.generate import EMPTY, SYSTEM, generate, generation_model
 
 
@@ -47,12 +47,32 @@ def test_generation_adapter_forwards_the_system_prompt():
     assert client.calls[0]["system"] == "rules"
 
 
+def test_generation_adapter_forwards_options_and_format():
+    client = FakeClient({"response": "{}"})
+
+    def generate(model, prompt, stream, **kwargs):
+        client.calls.append(
+            {"model": model, "prompt": prompt, "stream": stream, **kwargs}
+        )
+        return client.response
+
+    client.generate = generate
+    GenerationAdapter(client=client, model="gemma3:27b").generate(
+        "grade this",
+        system="json only",
+        options={"temperature": 0},
+        response_format="json",
+    )
+    assert client.calls[0]["options"] == {"temperature": 0}
+    assert client.calls[0]["format"] == "json"
+
+
 class RecordingModel:
     def __init__(self):
         self.calls = []
 
-    def generate(self, prompt, system=None):
-        self.calls.append({"prompt": prompt, "system": system})
+    def generate(self, prompt, system=None, **kwargs):
+        self.calls.append({"prompt": prompt, "system": system, **kwargs})
         return "answer"
 
 
@@ -110,6 +130,30 @@ def test_generate_sends_compare_pairs_including_a_missing_side():
     assert "current 2.0" in prompt
     assert "no dessert" in prompt
     assert prompt.rstrip().endswith("cake")
+
+
+def test_generate_cites_only_the_passage_the_answer_used():
+    class Quoting:
+        def generate(self, prompt, system=None):
+            return "Employees receive cake on Friday."
+
+    parking = {
+        "policy": "Parking Policy",
+        "version": "1.0",
+        "heading_path": "2. Blimps",
+        "text": "Blimps dock on the roof before sunset.",
+    }
+    cake = {
+        "policy": "HR Policy",
+        "version": "2.0",
+        "heading_path": "3. Leave",
+        "text": "Employees receive cake on Friday.",
+    }
+    text = generate("who gets cake?", "lookup", [parking, cake], Quoting())
+    assert "HR Policy 2.0, 3. Leave" in text
+    assert "Parking Policy" not in text
+    assert parking["cited"] is False
+    assert cake["cited"] is True
 
 
 def test_generate_skips_the_model_when_there_are_no_hits():

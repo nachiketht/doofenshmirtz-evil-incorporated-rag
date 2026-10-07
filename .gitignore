@@ -9,6 +9,12 @@ build/
 chroma/
 .ruff_cache/
 explanation.md
+how-it-works.md
 .env
 lab-submission.pdf
 lab-submission.docx
+.rag/
+feedback.jsonl
+last_answer.json
+results/offline_eval.json
+Old-Architecture.md

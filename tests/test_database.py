@@ -1,4 +1,4 @@
-from adpater.database_adapter import DatabaseAdapter
+from adapter.database_adapter import DatabaseAdapter
 
 
 def _record() -> dict:
@@ -44,3 +44,7 @@ def test_rows_returns_text_metadata_and_vector(tmp_path):
 
 def test_rows_on_an_empty_collection(tmp_path):
     assert DatabaseAdapter(tmp_path / "chroma").rows() == []
+
+
+def test_fetch_vectors_on_empty_input(tmp_path):
+    assert DatabaseAdapter(tmp_path / "chroma").fetch_vectors([]) == {}

@@ -47,9 +47,12 @@ def log(step: str, message: str) -> None:
 
 @contextmanager
 def stage(step: str):
+    from rag.tracing import span
+
     started = time.perf_counter()
     try:
-        yield
+        with span(step):
+            yield
     finally:
         if _question:
             elapsed = time.perf_counter() - started

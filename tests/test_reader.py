@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from rag.reader import policy_and_version, read
+from rag.reader import blocks_from_lines, policy_and_version, read
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
 HR_PDF = DOCS / "Doofenshmirtz Evil Inc - HR Policy v1.0.pdf"
@@ -34,6 +34,36 @@ def test_read_pdf_and_docx_return_lines_and_metadata():
     assert purpose["level"] == 1
     assert child["level"] == 2
     assert purpose["text"]
+
+
+def test_numbered_sentence_stays_inside_the_current_section():
+    blocks = blocks_from_lines(
+        [
+            "1. Purpose",
+            "Rules follow.",
+            "1. Employees must sign the log.",
+            "2. Scope",
+            "Visitors check in.",
+        ]
+    )
+    assert [block["heading"] for block in blocks] == ["1. Purpose", "2. Scope"]
+    assert "Employees must sign the log." in blocks[0]["text"]
+
+
+def test_prose_before_the_first_heading_is_indexed():
+    blocks = blocks_from_lines(
+        [
+            "Company Handbook",
+            "TOP SECRET — EYES ONLY",
+            "This preamble explains the scope of the handbook before any numbered section begins today.",
+            "1. Purpose",
+            "Be evil.",
+        ]
+    )
+    assert blocks[0]["heading"] == "Preamble"
+    assert "preamble explains" in blocks[0]["text"]
+    assert "TOP SECRET" not in blocks[0]["text"]
+    assert blocks[1]["heading"] == "1. Purpose"
 
 
 def test_unsupported_suffix_is_rejected(tmp_path):

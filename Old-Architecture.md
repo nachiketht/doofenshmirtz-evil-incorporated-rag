@@ -1,3 +1,5 @@
+> Historical. The current pipeline is described in README.md. This note is not kept in sync with the code.
+
 # Doofenshmirtz Evil Inc RAG — Architecture Brief
 
 **System:** `doofenshmirtz-evil-incorporated-rag` 0.1.0

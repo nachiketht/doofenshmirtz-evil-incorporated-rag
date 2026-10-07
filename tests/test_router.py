@@ -12,8 +12,9 @@ class FakeModel:
         self.reply = reply
         self.prompts = []
 
-    def generate(self, prompt):
+    def generate(self, prompt, **kwargs):
         self.prompts.append(prompt)
+        self.kwargs = kwargs
         return self.reply
 
 
@@ -27,12 +28,41 @@ def test_route_keeps_a_compare_paraphrase():
     assert decision == {"kind": "compare", "policy": "HR Policy", "version": ""}
     assert "what changed in HR Policy" in model.prompts[0]
     assert "HR Policy: 1.0, 2.0" in model.prompts[0]
+    assert "Pet Leave FAQ" not in model.prompts[0]
+    assert model.kwargs["options"] == {"temperature": 0}
+    assert model.kwargs["response_format"] == "json"
 
 
 def test_route_keeps_a_lookup_that_names_an_old_version():
     reply = '{"kind":"lookup","policy":"HR Policy","version":"1.0"}'
     decision = route("what did 1.0 say?", FakeModel(reply), POLICIES)
     assert decision == {"kind": "lookup", "policy": "HR Policy", "version": "1.0"}
+
+
+def test_router_reads_json_wrapped_in_a_fence():
+    raw = '```json\n{"kind":"lookup","policy":"HR Policy","version":"1.0"}\n```'
+    assert parse_route(raw, POLICIES) == {
+        "kind": "lookup",
+        "policy": "HR Policy",
+        "version": "1.0",
+    }
+
+
+def test_router_keeps_every_named_policy():
+    raw = json.dumps(
+        {
+            "kind": "lookup",
+            "policy": "",
+            "version": "",
+            "policies": ["HR Policy", "Health & Wellness Policy", "Nope"],
+        }
+    )
+    assert parse_route(raw, POLICIES) == {
+        "kind": "lookup",
+        "policy": "",
+        "version": "",
+        "policies": ["HR Policy", "Health & Wellness Policy"],
+    }
 
 
 @pytest.mark.parametrize(

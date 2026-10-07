@@ -27,10 +27,9 @@ def test_valid_record_passes(caplog):
     assert "pass" in caplog.text
 
 
-def test_missing_field_fails_after_two_attempts(caplog):
+def test_missing_field_fails(caplog):
     caplog.set_level(logging.INFO, logger="ingest")
     error = validate(_record(version=""))
     assert error == "missing field: version"
     failures = [r for r in caplog.records if "missing field: version" in r.message]
-    assert len(failures) == 2
-    assert "attempt=2" in failures[1].message
+    assert len(failures) == 1

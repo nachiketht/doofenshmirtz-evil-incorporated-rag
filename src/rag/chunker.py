@@ -61,7 +61,7 @@ def chunk(blocks: list[dict], policy: str, version: str, source: str) -> list[di
                     section_heading,
                     document_id,
                     section["text"],
-                    False,
+                    bool(section["text"].strip()),
                 )
             )
             for child in section["children"]:

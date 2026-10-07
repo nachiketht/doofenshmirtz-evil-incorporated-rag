@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from adpater.database_adapter import DatabaseAdapter
+from adapter.database_adapter import DatabaseAdapter
 from rag.ingest import ingest, main
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
@@ -39,11 +39,13 @@ def test_ingest_stores_pdf_and_docx_versions(tmp_path, caplog):
 
     assert any(name.endswith(".pdf") for name in sources)
     assert any(name.endswith(".docx") for name in sources)
-    assert versions["HR Policy"] == {"1.0", "2.0"}
+    assert any(name.endswith(".md") for name in sources)
+    assert versions["HR Policy"] == {"1.0", "2.0", "3.0"}
     assert versions["Preparedness Policy"] == {"1.0", "2.0"}
-    assert versions["Time and Usage Policy"] == {"1.0", "2.0"}
-    assert versions["Health Policy"] == {"1.0"}
-    assert embedder.tasks == ["document"]
+    assert versions["Time and Usage Policy"] == {"1.0", "2.0", "3.0"}
+    assert versions["Health Policy"] == {"1.0", "2.0"}
+    assert len(sources) == 100
+    assert set(embedder.tasks) == {"document"}
     assert any(
         "1. Purpose" in payload or "Dress Code" in payload for payload in embedder.texts
     )
@@ -51,8 +53,9 @@ def test_ingest_stores_pdf_and_docx_versions(tmp_path, caplog):
 
     assert ingest(DOCS, embedder, database) is None
     assert database.collection.count() == first
-    assert "files=7" in caplog.text
+    assert "files=100" in caplog.text
     assert "finished" in caplog.text
+    assert "reason=unchanged" in caplog.text
 
 
 def test_empty_directory_errors(tmp_path):
@@ -60,6 +63,8 @@ def test_empty_directory_errors(tmp_path):
     database = DatabaseAdapter(tmp_path / "chroma")
     with pytest.raises(ValueError, match="no policy files"):
         ingest(tmp_path, embedder, database)
+    with pytest.raises(ValueError, match="missing directory"):
+        ingest(tmp_path / "missing", embedder, database)
 
 
 def test_validation_failure_stores_nothing(tmp_path, caplog):
@@ -88,7 +93,7 @@ def test_validation_failure_stores_nothing(tmp_path, caplog):
         entry for entry in caplog.records if "missing field: version" in entry.message
     ]
     assert error == "missing field: version"
-    assert len(failures) == 2
+    assert len(failures) == 1
     assert database.collection.count() == 0
     assert embedder.tasks == []
 
@@ -96,21 +101,48 @@ def test_validation_failure_stores_nothing(tmp_path, caplog):
 def test_main_defaults_to_docs_and_chroma(monkeypatch):
     seen = {}
 
-    def fake_ingest(directory, embedder, database):
+    def fake_ingest(
+        directory,
+        embedder,
+        database,
+        force=False,
+        strategy=None,
+        extractor=None,
+        cache=None,
+    ):
         seen["directory"] = directory
         seen["database"] = database
+        seen["force"] = force
+        seen["strategy"] = strategy
 
+    monkeypatch.delenv("RAG_DB_BACKEND", raising=False)
+    monkeypatch.delenv("RAG_CHROMA_PATH", raising=False)
+    monkeypatch.delenv("RAG_CHUNKER", raising=False)
     monkeypatch.setattr("rag.ingest.EmbeddingAdapter", FakeEmbedder)
-    monkeypatch.setattr("rag.ingest.DatabaseAdapter", lambda path: path)
+    monkeypatch.setattr(
+        "rag.ingest.open_database",
+        lambda settings, path: path or settings.chroma_path,
+    )
     monkeypatch.setattr("rag.ingest.ingest", fake_ingest)
     assert main([]) == 0
-    assert seen["directory"] == "docs"
-    assert seen["database"] == "chroma"
+    assert seen == {
+        "directory": "docs",
+        "database": "chroma",
+        "force": False,
+        "strategy": "structural",
+    }
+    assert main(["other", "db", "--force", "--chunker", "contextual"]) == 0
+    assert seen == {
+        "directory": "other",
+        "database": "db",
+        "force": True,
+        "strategy": "contextual",
+    }
 
 
 def test_main_returns_the_validation_error(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr("rag.ingest.EmbeddingAdapter", FakeEmbedder)
-    monkeypatch.setattr("rag.ingest.DatabaseAdapter", lambda path: object())
+    monkeypatch.setattr("rag.ingest.open_database", lambda settings, path: object())
     monkeypatch.setattr(
         "rag.ingest.ingest", lambda *args, **kwargs: "missing field: version"
     )
