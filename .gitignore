@@ -10,6 +10,7 @@ chroma/
 .ruff_cache/
 explanation.md
 how-it-works.md
+ingestion-notes.md
 .env
 lab-submission.pdf
 lab-submission.docx
